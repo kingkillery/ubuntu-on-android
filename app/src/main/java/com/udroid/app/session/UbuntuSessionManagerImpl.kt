@@ -10,6 +10,7 @@ import com.udroid.app.storage.toDomain
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
 import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
@@ -62,8 +63,23 @@ class UbuntuSessionManagerImpl @Inject constructor(
     }
 
     override fun getSession(sessionId: String): UbuntuSession? {
-        // Note: This is a synchronous call. For async operations, use coroutines elsewhere
-        return null // TODO: Implement proper synchronous session retrieval or refactor to suspend
+        // Retrieve session synchronously using runBlocking
+        // This converts the async Flow to a synchronous result
+        return try {
+            runBlocking {
+                sessionRepository.observeSessions().first().find { it.id == sessionId }?.let { info ->
+                    UbuntuSessionImpl(
+                        id = info.id,
+                        config = info.toConfig(),
+                        sessionRepository = sessionRepository,
+                        nativeBridge = nativeBridge
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get session: $sessionId")
+            null
+        }
     }
 
     override suspend fun deleteSession(sessionId: String): Result<Unit> {
