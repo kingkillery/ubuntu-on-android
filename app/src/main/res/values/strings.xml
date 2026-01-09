@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ubuntu on Android</string>
+    <string name="setup_title">Setup Ubuntu</string>
+    <string name="setup_welcome">Welcome to Ubuntu on Android</string>
+    <string name="setup_description">Download and run Ubuntu on your Android device without root.</string>
+    <string name="sessions_title">Ubuntu Sessions</string>
+    <string name="settings_title">Settings</string>
+    <string name="desktop_title">Ubuntu Desktop</string>
+</resources>
