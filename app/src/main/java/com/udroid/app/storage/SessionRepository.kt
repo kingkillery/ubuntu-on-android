@@ -13,6 +13,7 @@ import com.udroid.app.session.UbuntuSession
 import com.udroid.app.session.UbuntuSessionImpl
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -52,7 +53,7 @@ class SessionRepository @Inject constructor(
     suspend fun loadSession(sessionId: String): SessionInfo? {
         val sessionJson = context.sessionDataStore.data.map { preferences ->
             preferences[stringPreferencesKey("$SESSION_PREFIX$sessionId")]
-        }.firstOrNull() ?: return null
+        }.first() ?: return null
 
         return try {
             json.decodeFromString<SessionInfo>(sessionJson)
@@ -97,7 +98,7 @@ class SessionRepository @Inject constructor(
             val sessionJson = preferences[stringPreferencesKey("$SESSION_PREFIX$sessionId")]
             sessionJson?.let {
                 val session = json.decodeFromString<SessionInfo>(it)
-                val updated = session.copy(state = state.toDomain())
+                val updated = session.copy(state = state.toData())
                 preferences[stringPreferencesKey("$SESSION_PREFIX$sessionId")] =
                     json.encodeToString(updated)
             }

@@ -8,7 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -132,9 +132,9 @@ fun SessionItem(
                 IconButton(onClick = onToggle) {
                     Icon(
                         if (session.state is com.udroid.app.model.SessionState.Running) {
-                            Icons.Default.Stop
+                            Icons.Filled.Close
                         } else {
-                            Icons.Default.PlayArrow
+                            Icons.Filled.PlayArrow
                         },
                         contentDescription = if (session.state is com.udroid.app.model.SessionState.Running) {
                             "Stop"

@@ -1,1 +1,6 @@
 *test*
+
+# Ralph loop files
+logs/
+status.json
+docs/generated/

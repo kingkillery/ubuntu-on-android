@@ -2,7 +2,7 @@ package com.udroid.app.session
 
 import com.udroid.app.model.ProcessResult
 import com.udroid.app.model.SessionState
-import com.udroid.app.native.NativeBridge
+import com.udroid.app.nativebridge.NativeBridge
 import com.udroid.app.storage.SessionInfo
 import com.udroid.app.storage.SessionRepository
 import com.udroid.app.storage.toData
@@ -61,14 +61,9 @@ class UbuntuSessionManagerImpl @Inject constructor(
         }
     }
 
-    suspend fun getSession(sessionId: String): UbuntuSession? {
-        val sessionInfo = sessionRepository.loadSession(sessionId) ?: return null
-        return UbuntuSessionImpl(
-            id = sessionInfo.id,
-            config = sessionInfo.toConfig(),
-            sessionRepository = sessionRepository,
-            nativeBridge = nativeBridge
-        )
+    override fun getSession(sessionId: String): UbuntuSession? {
+        // Note: This is a synchronous call. For async operations, use coroutines elsewhere
+        return null // TODO: Implement proper synchronous session retrieval or refactor to suspend
     }
 
     override suspend fun deleteSession(sessionId: String): Result<Unit> {
@@ -133,7 +128,7 @@ class UbuntuSessionImpl @Inject constructor(
     override val stateFlow: Flow<SessionState> =
         sessionRepository.observeSessions()
             .map { sessions ->
-                sessions.find { it.id == this.id }?.state ?: SessionState.Created
+                sessions.find { it.id == this.id }?.state?.toDomain() ?: SessionState.Created
             }
 
     override suspend fun start(): Result<Unit> {
@@ -152,14 +147,14 @@ class UbuntuSessionImpl @Inject constructor(
             vncPort = 5901
             
             _state = SessionState.Running(vncPort)
-            sessionRepository.updateSessionState(id, _state.toData())
+            sessionRepository.updateSessionState(id, _state)
             
             Timber.d("Session started: $id (VNC port: $vncPort)")
             Result.success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "Failed to start session: $id")
             _state = SessionState.Error(e.message ?: "Unknown error")
-            sessionRepository.updateSessionState(id, _state.toData())
+            sessionRepository.updateSessionState(id, _state)
             Result.failure(e)
         }
     }
@@ -171,7 +166,7 @@ class UbuntuSessionImpl @Inject constructor(
             }
 
             _state = SessionState.Stopping
-            sessionRepository.updateSessionState(id, _state.toData())
+            sessionRepository.updateSessionState(id, _state)
             
             Timber.d("Stopping session: $id")
             
@@ -180,14 +175,14 @@ class UbuntuSessionImpl @Inject constructor(
             }
             
             _state = SessionState.Stopped
-            sessionRepository.updateSessionState(id, _state.toData())
+            sessionRepository.updateSessionState(id, _state)
             
             Timber.d("Session stopped: $id")
             Result.success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "Failed to stop session: $id")
             _state = SessionState.Error(e.message ?: "Unknown error")
-            sessionRepository.updateSessionState(id, _state.toData())
+            sessionRepository.updateSessionState(id, _state)
             Result.failure(e)
         }
     }

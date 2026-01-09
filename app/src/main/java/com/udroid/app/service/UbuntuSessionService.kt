@@ -127,7 +127,7 @@ class UbuntuSessionService : Service() {
         return Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setContentTitle("Ubuntu Session Running")
             .setContentText("Session: $sessionId")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
