@@ -10,6 +10,7 @@ import com.udroid.app.storage.toDomain
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
 import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
@@ -152,14 +153,14 @@ class UbuntuSessionImpl @Inject constructor(
             vncPort = 5901
             
             _state = SessionState.Running(vncPort)
-            sessionRepository.updateSessionState(id, _state.toData())
+            sessionRepository.updateSessionState(id, _state)
             
             Timber.d("Session started: $id (VNC port: $vncPort)")
             Result.success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "Failed to start session: $id")
             _state = SessionState.Error(e.message ?: "Unknown error")
-            sessionRepository.updateSessionState(id, _state.toData())
+            sessionRepository.updateSessionState(id, _state)
             Result.failure(e)
         }
     }
@@ -171,7 +172,7 @@ class UbuntuSessionImpl @Inject constructor(
             }
 
             _state = SessionState.Stopping
-            sessionRepository.updateSessionState(id, _state.toData())
+            sessionRepository.updateSessionState(id, _state)
             
             Timber.d("Stopping session: $id")
             
@@ -180,14 +181,14 @@ class UbuntuSessionImpl @Inject constructor(
             }
             
             _state = SessionState.Stopped
-            sessionRepository.updateSessionState(id, _state.toData())
+            sessionRepository.updateSessionState(id, _state)
             
             Timber.d("Session stopped: $id")
             Result.success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "Failed to stop session: $id")
             _state = SessionState.Error(e.message ?: "Unknown error")
-            sessionRepository.updateSessionState(id, _state.toData())
+            sessionRepository.updateSessionState(id, _state)
             Result.failure(e)
         }
     }

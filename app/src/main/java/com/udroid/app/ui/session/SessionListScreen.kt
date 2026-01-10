@@ -134,7 +134,7 @@ fun SessionItem(
                         if (session.state is com.udroid.app.model.SessionState.Running) {
                             Icons.Default.Close
                         } else {
-                            Icons.Default.PlayArrow
+                            Icons.Filled.PlayArrow
                         },
                         contentDescription = if (session.state is com.udroid.app.model.SessionState.Running) {
                             "Stop"

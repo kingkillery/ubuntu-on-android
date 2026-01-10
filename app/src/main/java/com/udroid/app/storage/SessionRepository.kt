@@ -53,7 +53,7 @@ class SessionRepository @Inject constructor(
     suspend fun loadSession(sessionId: String): SessionInfo? {
         val sessionJson = context.sessionDataStore.data.map { preferences ->
             preferences[stringPreferencesKey("$SESSION_PREFIX$sessionId")]
-        }.firstOrNull() ?: return null
+        }.first() ?: return null
 
         return try {
             json.decodeFromString<SessionInfo>(sessionJson)

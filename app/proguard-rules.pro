@@ -5,3 +5,7 @@
 -keepclassmembers class * extends androidx.lifecycle.ViewModel {
     <init>();
 }
+
+# Suppress warnings for Gradle/build-time classes
+-dontwarn org.gradle.api.Plugin
+-dontwarn org.jetbrains.kotlin.gradle.**
