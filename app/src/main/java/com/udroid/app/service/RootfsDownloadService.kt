@@ -155,25 +155,26 @@ class RootfsDownloadService : Service() {
             if (!response.isSuccessful) {
                 throw Exception("Download failed: ${response.code}")
             }
-            
-            val totalBytes = response.body.contentLength()
+
+            val body = response.body ?: throw Exception("Empty response body")
+            val totalBytes = body.contentLength()
             var downloadedBytes = 0L
-            
+
             file.outputStream().sink().buffer().use { sink ->
-                response.body.source().use { source ->
-                    val buffer = okio.Buffer()
-                    var bytesRead: Long
-                    
-                    while (source.read(buffer).also { bytesRead = it } != -1L) {
-                        sink.write(buffer, bytesRead)
+                body.source().use { source ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+
+                    while (source.read(buffer).also { bytesRead = it } != -1) {
+                        sink.write(buffer, 0, bytesRead)
                         downloadedBytes += bytesRead
-                        
+
                         val progress = if (totalBytes > 0) {
                             ((downloadedBytes * 100) / totalBytes).toInt()
                         } else {
                             0
                         }
-                        
+
                         onProgress(progress, downloadedBytes, totalBytes)
                     }
                 }
@@ -197,7 +198,7 @@ class RootfsDownloadService : Service() {
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setContentTitle("Downloading Ubuntu")
             .setContentText("${distro.displayName} - $text $progress%")
-            .setSmallIcon(android.R.drawable.ic_menu_info)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)

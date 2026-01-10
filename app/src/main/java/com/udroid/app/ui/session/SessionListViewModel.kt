@@ -5,9 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.udroid.app.session.UbuntuSessionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -17,9 +18,8 @@ class SessionListViewModel @Inject constructor(
     private val sessionManager: UbuntuSessionManager
 ) : ViewModel() {
 
-    private val _sessions = sessionManager.listSessions()
-    val sessions: StateFlow<List<com.udroid.app.session.UbuntuSession>> = _sessions
-        .asStateFlow(initial = emptyList())
+    val sessions: StateFlow<List<com.udroid.app.session.UbuntuSession>> = sessionManager.listSessions()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()

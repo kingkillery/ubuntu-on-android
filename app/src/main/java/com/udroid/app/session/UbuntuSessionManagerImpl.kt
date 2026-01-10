@@ -2,7 +2,7 @@ package com.udroid.app.session
 
 import com.udroid.app.model.ProcessResult
 import com.udroid.app.model.SessionState
-import com.udroid.app.native.NativeBridge
+import com.udroid.app.nativebridge.NativeBridge
 import com.udroid.app.storage.SessionInfo
 import com.udroid.app.storage.SessionRepository
 import com.udroid.app.storage.toData
@@ -61,7 +61,7 @@ class UbuntuSessionManagerImpl @Inject constructor(
         }
     }
 
-    suspend fun getSession(sessionId: String): UbuntuSession? {
+    override suspend fun getSession(sessionId: String): UbuntuSession? {
         val sessionInfo = sessionRepository.loadSession(sessionId) ?: return null
         return UbuntuSessionImpl(
             id = sessionInfo.id,
@@ -133,7 +133,7 @@ class UbuntuSessionImpl @Inject constructor(
     override val stateFlow: Flow<SessionState> =
         sessionRepository.observeSessions()
             .map { sessions ->
-                sessions.find { it.id == this.id }?.state ?: SessionState.Created
+                sessions.find { it.id == this.id }?.state?.toDomain() ?: SessionState.Created
             }
 
     override suspend fun start(): Result<Unit> {

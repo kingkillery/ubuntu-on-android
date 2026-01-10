@@ -13,6 +13,7 @@ import com.udroid.app.session.UbuntuSession
 import com.udroid.app.session.UbuntuSessionImpl
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -92,12 +93,12 @@ class SessionRepository @Inject constructor(
         Timber.d("Deleted session: $sessionId")
     }
 
-    suspend fun updateSessionState(sessionId: String, state: SessionState) {
+    suspend fun updateSessionState(sessionId: String, state: SessionStateData) {
         context.sessionDataStore.edit { preferences ->
             val sessionJson = preferences[stringPreferencesKey("$SESSION_PREFIX$sessionId")]
             sessionJson?.let {
                 val session = json.decodeFromString<SessionInfo>(it)
-                val updated = session.copy(state = state.toDomain())
+                val updated = session.copy(state = state)
                 preferences[stringPreferencesKey("$SESSION_PREFIX$sessionId")] =
                     json.encodeToString(updated)
             }

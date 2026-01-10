@@ -1,4 +1,4 @@
-package com.udroid.app.native
+package com.udroid.app.nativebridge
 
 import timber.log.Timber
 import javax.inject.Inject

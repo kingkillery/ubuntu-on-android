@@ -17,7 +17,7 @@ data class SessionConfig(
 interface UbuntuSessionManager {
     suspend fun createSession(config: SessionConfig): Result<UbuntuSession>
     fun listSessions(): Flow<List<UbuntuSession>>
-    fun getSession(sessionId: String): UbuntuSession?
+    suspend fun getSession(sessionId: String): UbuntuSession?
     suspend fun deleteSession(sessionId: String): Result<Unit>
     suspend fun startSession(sessionId: String): Result<Unit>
     suspend fun stopSession(sessionId: String): Result<Unit>
