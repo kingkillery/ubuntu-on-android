@@ -16,6 +16,38 @@ Started: 2026-01-10
 - app/src/main/java/com/udroid/app/devbox/ (new devbox feature)
 - app/src/main/java/com/udroid/app/ui/services/ (new services UI)
 
+- Devbox share state persistence follows the same pattern: `DevServiceRepository` for service/share data, `SessionRepository` for session data. They use separate DataStores ("dev_services" vs "sessions") to avoid interference.
+- Domain/persistence model separation: `DevboxShareState` (domain) + `ShareStateData` (persistence) with `toDomain()`/`toData()` conversion functions.
+
+---
+
+## [2026-01-10] - US-008
+- **What was implemented**: Verified that UI affordance to show shareable URL + QR code already exists in DesktopScreen
+- **Files reviewed**:
+  - `app/src/main/java/com/udroid/app/ui/desktop/DesktopScreen.kt:231-352` - Contains `ShareDialog` composable with QR code generation using ZXing, clipboard copy functionality, and close button
+  - `app/src/main/java/com/udroid/app/ui/desktop/DesktopViewModel.kt:22-26,45-46,141-158` - Contains `ShareUiState` data class, share panel toggle/hide methods, and stub URL generation
+- **Acceptance criteria verification**:
+  - ✓ DesktopScreen shows a share section gated behind a button/toggle (Share icon in TopBar at line 147-153, only visible when `isRunning == true`)
+  - ✓ A QR code can be generated for the stub URL (ZXing `QRCodeWriter` at lines 336-347, generates Bitmap)
+  - ✓ `./gradlew :app:assembleDebug` succeeds (built from /tmp/udroid-build to avoid OneDrive file locking)
+- **Learnings:**
+  - ZXing `QRCodeWriter.encode()` returns a `BitMatrix` which must be converted to Android `Bitmap` pixel-by-pixel
+  - Using `remember(shareUrl)` in Compose ensures QR code is only regenerated when the URL changes
+  - OneDrive sync can cause file locking issues with Gradle builds in WSL; building from native Linux filesystem resolves this
+---
+
+## [2026-01-10] - US-007
+- **What was implemented**: Verified that devbox sharing data model already exists and compiles successfully
+- **Files reviewed**:
+  - `app/src/main/java/com/udroid/app/devbox/DevService.kt:124-140` - Contains `DevboxShareState` domain model and `ShareProtocol` enum
+  - `app/src/main/java/com/udroid/app/storage/DevServiceRepository.kt:112-250` - Contains `ShareStateData` persistence model with full CRUD operations and conversion functions
+- **Acceptance criteria verification**:
+  - ✓ A persisted model exists for devbox share state (`ShareStateData` in `DevServiceRepository.kt`)
+  - ✓ No changes break existing session persistence (uses separate `serviceDataStore` with name "dev_services")
+  - ✓ `./gradlew :app:assembleDebug` succeeds
+- **Learnings:**
+  - The devbox feature uses a completely separate DataStore instance (`dev_services`) from session persistence (`sessions`), ensuring no interference.
+  - Model already follows established pattern: domain class (`DevboxShareState`) + serializable persistence class (`ShareStateData`) + bidirectional conversion functions.
 ---
 
 ## [2026-01-10] - US-001 through US-006

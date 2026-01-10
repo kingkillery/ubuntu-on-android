@@ -76,7 +76,7 @@
         "./gradlew :app:assembleDebug succeeds"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "Keep story small: model + repository only"
     },
     {
@@ -88,7 +88,7 @@
         "./gradlew :app:assembleDebug succeeds"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "Do not implement networking yet; just UX + QR"
     }
   ]
