@@ -21,6 +21,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.udroid.app.ui.desktop.DesktopScreen
 import com.udroid.app.ui.session.SessionListScreen
+import com.udroid.app.ui.services.ServicesScreen
 import com.udroid.app.ui.setup.SetupWizardScreen
 import com.udroid.app.ui.theme.UdroidTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -131,6 +132,9 @@ fun AppNavigation(
                 },
                 onSessionClick = { sessionId ->
                     navController.navigate("desktop/$sessionId")
+                },
+                onServicesClick = { sessionId ->
+                    navController.navigate("services/$sessionId")
                 }
             )
         }
@@ -153,6 +157,18 @@ fun AppNavigation(
             val sessionId = backStackEntry.arguments?.getString("sessionId") ?: return@composable
             DesktopScreen(
                 sessionId = sessionId,
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(
+            route = "services/{sessionId}",
+            arguments = listOf(navArgument("sessionId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val sessionId = backStackEntry.arguments?.getString("sessionId") ?: return@composable
+            ServicesScreen(
                 onBack = {
                     navController.popBackStack()
                 }

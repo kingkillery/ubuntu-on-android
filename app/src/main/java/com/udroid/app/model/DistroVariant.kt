@@ -3,7 +3,8 @@ package com.udroid.app.model
 enum class UbuntuVersion(val versionNumber: String) {
     FOCAL("20.04"),
     JAMMY("22.04"),
-    NOBLE("24.04")
+    NOBLE("24.04"),
+    ALPINE("3.21")
 }
 
 enum class DesktopEnvironment(val displayName: String) {
@@ -18,7 +19,9 @@ enum class DistroVariant(
     val displayName: String,
     val version: UbuntuVersion,
     val desktop: DesktopEnvironment,
-    val sizeBytes: Long
+    val sizeBytes: Long,
+    val bundled: Boolean = false,
+    val assetPath: String? = null
 ) {
     JAMMY_XFCE4(
         id = "jammy:xfce4",
@@ -47,11 +50,20 @@ enum class DistroVariant(
         version = UbuntuVersion.NOBLE,
         desktop = DesktopEnvironment.NONE,
         sizeBytes = 500_000_000L
+    ),
+    ALPINE_MINI(
+        id = "alpine:mini",
+        displayName = "Alpine Linux (Minimal, Bundled)",
+        version = UbuntuVersion.ALPINE,
+        desktop = DesktopEnvironment.NONE,
+        sizeBytes = 3_000_000L,
+        bundled = true,
+        assetPath = "rootfs/alpine-arm64.tar.gz.bin"
     );
 
     companion object {
         fun fromId(id: String): DistroVariant? =
-            values().find { it.id == id }
+            entries.find { it.id == id }
     }
 }
 

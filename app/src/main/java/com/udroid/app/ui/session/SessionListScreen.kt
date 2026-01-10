@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,6 +23,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 fun SessionListScreen(
     onCreateSession: () -> Unit,
     onSessionClick: (sessionId: String) -> Unit,
+    onServicesClick: (sessionId: String) -> Unit,
     viewModel: SessionListViewModel = hiltViewModel()
 ) {
     val sessions by viewModel.sessions.collectAsState()
@@ -63,6 +65,7 @@ fun SessionListScreen(
                             session = session,
                             onClick = { onSessionClick(session.id) },
                             onDelete = { viewModel.deleteSession(session.id) },
+                            onServices = { onServicesClick(session.id) },
                             onToggle = {
                                 when (session.state) {
                                     is com.udroid.app.model.SessionState.Running -> {
@@ -96,6 +99,7 @@ fun SessionItem(
     session: com.udroid.app.session.UbuntuSession,
     onClick: () -> Unit,
     onDelete: () -> Unit,
+    onServices: () -> Unit,
     onToggle: () -> Unit
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -128,7 +132,13 @@ fun SessionItem(
                 SessionStateBadge(state = session.state)
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                IconButton(onClick = onServices) {
+                    Icon(
+                        Icons.Default.Settings,
+                        contentDescription = "Services"
+                    )
+                }
                 IconButton(onClick = onToggle) {
                     Icon(
                         if (session.state is com.udroid.app.model.SessionState.Running) {

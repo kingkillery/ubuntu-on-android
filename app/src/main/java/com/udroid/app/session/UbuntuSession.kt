@@ -31,5 +31,5 @@ interface UbuntuSession {
 
     suspend fun start(): Result<Unit>
     suspend fun stop(): Result<Unit>
-    suspend fun exec(command: String): Result<ProcessResult>
+    suspend fun exec(command: String, timeoutSeconds: Long = 60): Result<ProcessResult>
 }

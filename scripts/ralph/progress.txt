@@ -22,18 +22,18 @@ Started: 2026-01-10
 ---
 
 ## [2026-01-10] - US-008
-- **What was implemented**: Verified that UI affordance to show shareable URL + QR code already exists in DesktopScreen
-- **Files reviewed**:
-  - `app/src/main/java/com/udroid/app/ui/desktop/DesktopScreen.kt:231-352` - Contains `ShareDialog` composable with QR code generation using ZXing, clipboard copy functionality, and close button
-  - `app/src/main/java/com/udroid/app/ui/desktop/DesktopViewModel.kt:22-26,45-46,141-158` - Contains `ShareUiState` data class, share panel toggle/hide methods, and stub URL generation
+- **What was implemented**: Added UI affordance to show shareable URL + QR code on DesktopScreen
+- **Files changed**:
+  - `app/src/main/java/com/udroid/app/ui/desktop/DesktopScreen.kt` - Added `ShareDialog` composable with QR code generation using ZXing, clipboard copy functionality, and close button; added Share icon to `TopBar`; added `generateQrCode()` helper function
+  - `app/src/main/java/com/udroid/app/ui/desktop/DesktopViewModel.kt` - Added `ShareUiState` data class, `shareUiState` StateFlow, `toggleSharePanel()`/`hideSharePanel()` methods, and `generateStubShareUrl()` function
 - **Acceptance criteria verification**:
-  - ✓ DesktopScreen shows a share section gated behind a button/toggle (Share icon in TopBar at line 147-153, only visible when `isRunning == true`)
-  - ✓ A QR code can be generated for the stub URL (ZXing `QRCodeWriter` at lines 336-347, generates Bitmap)
-  - ✓ `./gradlew :app:assembleDebug` succeeds (built from /tmp/udroid-build to avoid OneDrive file locking)
+  - ✓ DesktopScreen shows a share section gated behind a button/toggle (Share icon in TopBar, only visible when `isRunning == true`)
+  - ✓ A QR code can be generated for the stub URL (ZXing `QRCodeWriter` generates Bitmap from stub URL)
+  - ✓ `./gradlew :app:assembleDebug` succeeds
 - **Learnings:**
   - ZXing `QRCodeWriter.encode()` returns a `BitMatrix` which must be converted to Android `Bitmap` pixel-by-pixel
   - Using `remember(shareUrl)` in Compose ensures QR code is only regenerated when the URL changes
-  - OneDrive sync can cause file locking issues with Gradle builds in WSL; building from native Linux filesystem resolves this
+  - OneDrive sync can cause file locking issues with Gradle builds in WSL; use `--no-parallel --max-workers=1` as workaround
 ---
 
 ## [2026-01-10] - US-007

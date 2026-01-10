@@ -63,6 +63,11 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    // Prevent AAPT from decompressing gz files - we need them compressed
+    androidResources {
+        noCompress += listOf("gz", "tar.gz", "xz")
+    }
 }
 
 dependencies {
@@ -111,6 +116,12 @@ dependencies {
 
     // Logging
     implementation("com.jakewharton.timber:timber:5.0.1")
+
+    // Archive extraction
+    implementation("org.apache.commons:commons-compress:1.26.0")
+
+    // QR code generation
+    implementation("com.google.zxing:core:3.5.2")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

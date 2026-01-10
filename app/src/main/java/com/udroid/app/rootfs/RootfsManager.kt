@@ -7,11 +7,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
+import android.util.Log
 import timber.log.Timber
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
+import java.io.BufferedInputStream
 import java.io.File
+
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private const val TAG = "RootfsManager"
 
 @Singleton
 class RootfsManager @Inject constructor(
@@ -28,7 +38,9 @@ class RootfsManager @Inject constructor(
     fun isRootfsInstalled(distro: DistroVariant): Boolean {
         val rootfsPath = getRootfsPath(distro)
         val markerFile = File(rootfsPath, ".installed")
-        return markerFile.exists()
+        val installed = markerFile.exists()
+        Log.d(TAG, "isRootfsInstalled(${distro.id}): path=$rootfsPath, markerExists=$installed")
+        return installed
     }
 
     fun getRootfsPath(distro: DistroVariant): File {
@@ -75,17 +87,70 @@ class RootfsManager @Inject constructor(
         try {
             Timber.d("Extracting rootfs: ${archiveFile.name} -> $targetDir")
             targetDir.mkdirs()
-            
-            // TODO: Implement actual tar.gz extraction
-            // For now, create marker file
+
+            val totalSize = archiveFile.length()
+            var extractedSize = 0L
+
+            FileInputStream(archiveFile).use { fis ->
+                BufferedInputStream(fis).use { bis ->
+                    GzipCompressorInputStream(bis).use { gzis ->
+                        TarArchiveInputStream(gzis).use { tais ->
+                            var entry: TarArchiveEntry? = tais.nextEntry
+                            while (entry != null) {
+                                val outputFile = File(targetDir, entry.name)
+
+                                if (entry.isDirectory) {
+                                    outputFile.mkdirs()
+                                } else {
+                                    // Ensure parent directory exists
+                                    outputFile.parentFile?.mkdirs()
+
+                                    // Handle symlinks
+                                    if (entry.isSymbolicLink) {
+                                        // Create symlink file with target path stored
+                                        // Android doesn't support symlinks well, store as regular file
+                                        val linkTarget = entry.linkName
+                                        Timber.d("Symlink: ${entry.name} -> $linkTarget")
+                                        // Skip symlinks for now, they cause issues
+                                    } else {
+                                        // Extract regular file
+                                        FileOutputStream(outputFile).use { fos ->
+                                            val buffer = ByteArray(8192)
+                                            var bytesRead: Int
+                                            while (tais.read(buffer).also { bytesRead = it } != -1) {
+                                                fos.write(buffer, 0, bytesRead)
+                                            }
+                                        }
+
+                                        // Set executable permission if needed
+                                        if (entry.mode and 0b001_000_000 != 0) {
+                                            outputFile.setExecutable(true, false)
+                                        }
+                                    }
+                                }
+
+                                extractedSize += entry.size
+                                val progress = ((extractedSize.toFloat() / totalSize) * 100).toInt().coerceIn(0, 99)
+                                onProgress(progress)
+
+                                entry = tais.nextEntry
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Create marker file to indicate successful extraction
             val markerFile = File(targetDir, ".installed")
             markerFile.createNewFile()
-            
+
             onProgress(100)
-            Timber.d("Rootfs extracted successfully")
+            Timber.d("Rootfs extracted successfully to $targetDir")
             Result.success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "Failed to extract rootfs")
+            // Clean up partial extraction
+            targetDir.deleteRecursively()
             Result.failure(e)
         }
     }
@@ -139,6 +204,82 @@ class RootfsManager @Inject constructor(
             Result.success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "Failed to clear cache")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun installBundledRootfs(
+        distro: DistroVariant,
+        onProgress: (Int) -> Unit
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        Log.d(TAG, "=== installBundledRootfs called for ${distro.id} ===")
+        if (!distro.bundled || distro.assetPath == null) {
+            Log.e(TAG, "Distro ${distro.id} is not bundled or has no assetPath")
+            return@withContext Result.failure(IllegalArgumentException("Distro ${distro.id} is not bundled"))
+        }
+
+        try {
+            Log.d(TAG, "Installing bundled rootfs: ${distro.id} from ${distro.assetPath}")
+            Timber.d("Installing bundled rootfs: ${distro.id} from ${distro.assetPath}")
+            val targetDir = getRootfsPath(distro)
+            targetDir.mkdirs()
+
+            onProgress(5)
+
+            context.assets.open(distro.assetPath).use { assetStream ->
+                BufferedInputStream(assetStream).use { bis ->
+                    GzipCompressorInputStream(bis).use { gzis ->
+                        TarArchiveInputStream(gzis).use { tais ->
+                            var entry: TarArchiveEntry? = tais.nextEntry
+                            var entryCount = 0
+                            while (entry != null) {
+                                val outputFile = File(targetDir, entry.name)
+
+                                if (entry.isDirectory) {
+                                    outputFile.mkdirs()
+                                } else {
+                                    outputFile.parentFile?.mkdirs()
+
+                                    if (entry.isSymbolicLink) {
+                                        Timber.d("Symlink: ${entry.name} -> ${entry.linkName}")
+                                        // Skip symlinks for Android compatibility
+                                    } else {
+                                        FileOutputStream(outputFile).use { fos ->
+                                            val buffer = ByteArray(8192)
+                                            var bytesRead: Int
+                                            while (tais.read(buffer).also { bytesRead = it } != -1) {
+                                                fos.write(buffer, 0, bytesRead)
+                                            }
+                                        }
+
+                                        if (entry.mode and 0b001_000_000 != 0) {
+                                            outputFile.setExecutable(true, false)
+                                        }
+                                    }
+                                }
+
+                                entryCount++
+                                // Estimate progress (Alpine has ~600 files)
+                                val progress = (5 + (entryCount * 90 / 700)).coerceIn(5, 95)
+                                onProgress(progress)
+
+                                entry = tais.nextEntry
+                            }
+                        }
+                    }
+                }
+            }
+
+            val markerFile = File(targetDir, ".installed")
+            markerFile.createNewFile()
+
+            onProgress(100)
+            Timber.d("Bundled rootfs installed successfully: ${distro.id}")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to install bundled rootfs")
+            val targetDir = getRootfsPath(distro)
+            targetDir.deleteRecursively()
             Result.failure(e)
         }
     }
