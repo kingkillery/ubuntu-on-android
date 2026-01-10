@@ -1,5 +1,11 @@
 ## Note & Disclaimer!
 
+This document is preserved from the legacy **Termux-based** udroid/ubuntu-on-android workflow.
+
+It is not a disclaimer for the standalone Android app code in this repository.
+
+For this repo’s current status and scope, see `README.md`.
+
 **A note before you try**
 - As lot of it is preinstalled you can login and start right after you install.
 - Before installation, be sure that you're on stable internet and your device have 5-6gb free space for neat installation.

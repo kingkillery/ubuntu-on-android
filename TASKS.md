@@ -101,11 +101,11 @@ graph TD
 graph TD
     B1[B1: Create Android project scaffold] --> B2[B2: Configure Gradle build system]
     B2 --> B3[B3: Implement MainActivity]
-    B3 --> B4[B4: Implement SetupWizardActivity]
-    B4 --> B5[B5: Implement SessionListActivity]
-    B5 --> B6[B6: Implement DesktopActivity stub]
-    B6 --> B7[B7: Implement SettingsFragment]
-    B7 --> B8[B8: Create ViewModels]
+    B3 --> B4[B4: Implement SetupWizardScreen (Compose)]
+    B4 --> B5[B5: Implement SessionListScreen (Compose)]
+    B5 --> B6[B6: Implement Desktop UI (DesktopActivity + DesktopScreen placeholder)]
+    B6 --> B7[B7: Settings (future)]
+    B5 --> B8[B8: Create ViewModels]
 ```
 
 **Tasks:**
@@ -115,7 +115,7 @@ graph TD
 - [ ] Setup Gradle wrapper and version
 - [ ] Configure AndroidManifest with permissions
 - [ ] Setup application class
-- [ ] Configure dependency injection (Koin/Hilt)
+- [ ] Configure dependency injection (Hilt)
 - [ ] **Deliverable:** Compilable Android project scaffold
 - [ ] **Estimate:** 1-2 days
 - [ ] **Dependencies:** A4 (for interface definitions)
@@ -140,41 +140,33 @@ graph TD
 - [ ] **Estimate:** 2-3 days
 - [ ] **Dependencies:** B2
 
-#### B4: Implement SetupWizardActivity
-- [ ] Create wizard flow (3-4 steps)
-- [ ] Implement distro selection screen
-- [ ] Implement storage confirmation
-- [ ] Integrate with RootfsDownloadService (stub)
-- [ ] **Deliverable:** SetupWizardActivity.kt + layouts
+#### B4: Implement SetupWizardScreen (Compose)
+- [ ] Implement distro selection
+- [ ] Implement session naming
+- [ ] Wire create session action via `UbuntuSessionManager.createSession(config)`
+- [ ] **Deliverable:** `SetupWizardScreen.kt` + `SetupWizardViewModel.kt`
 - [ ] **Estimate:** 4-5 days
 - [ ] **Dependencies:** B3, E1 (download service stub)
 - [ ] **Parallel with:** B5 (if E1 ready)
 
-#### B5: Implement SessionListActivity
-- [ ] Create RecyclerView for session list
-- [ ] Implement FAB for new session
-- [ ] Implement swipe-to-delete
-- [ ] Add session status indicators
-- [ ] **Deliverable:** SessionListActivity.kt + layouts
+#### B5: Implement SessionListScreen (Compose)
+- [ ] List sessions from `UbuntuSessionManager.listSessions()`
+- [ ] Start/stop/delete actions via Result-based APIs
+- [ ] **Deliverable:** `SessionListScreen.kt` + `SessionListViewModel.kt`
 - [ ] **Estimate:** 3-4 days
 - [ ] **Dependencies:** B3
 - [ ] **Parallel with:** B4
 
-#### B6: Implement DesktopActivity Stub
-- [ ] Create full-screen Activity
-- [ ] Add SurfaceView placeholder for desktop rendering
-- [ ] Implement status bar with session info
-- [ ] Setup keyboard handling hooks
-- [ ] **Deliverable:** DesktopActivity.kt + layout
+#### B6: Implement Desktop UI
+- [ ] DesktopActivity wrapper to host Compose desktop UI
+- [ ] DesktopScreen placeholder surface and stop control
+- [ ] **Deliverable:** `ui/desktop/DesktopActivity.kt` + `ui/desktop/DesktopScreen.kt`
 - [ ] **Estimate:** 2-3 days
 - [ ] **Dependencies:** B5
 
-#### B7: Implement SettingsFragment
-- [ ] Create app settings (theme, notifications, storage)
-- [ ] Implement per-session settings
-- [ ] Add storage usage display
-- [ ] Add about and help sections
-- [ ] **Deliverable:** SettingsFragment.kt + layouts
+#### B7: Settings (Future)
+- [ ] Define settings scope and persistence model
+- [ ] Add screen/route if/when needed
 - [ ] **Estimate:** 3-4 days
 - [ ] **Dependencies:** B6
 
@@ -184,7 +176,7 @@ graph TD
 - [ ] Implement DesktopViewModel (stub for now)
 - [ ] **Deliverable:** ViewModel classes
 - [ ] **Estimate:** 2-3 days
-- [ ] **Dependencies:** B5, B7
+- [ ] **Dependencies:** B5
 
 ---
 

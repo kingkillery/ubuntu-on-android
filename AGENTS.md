@@ -101,7 +101,7 @@ Design and implement the Android application framework that manages Ubuntu sessi
 ### Scope
 
 **In Scope:**
-- Android app architecture (Activities, Services, Fragments)
+- Android app architecture (single-activity Compose app + foreground service)
 - Permission request flows
 - Session management UI
 - Settings and configuration UI
@@ -116,10 +116,10 @@ Design and implement the Android application framework that manages Ubuntu sessi
 ### Key Responsibilities
 
 1. **App Architecture**
-   - Implement Activity/Fragment structure
-   - Design navigation graph
-   - Setup dependency injection (Koin/Hilt)
-   - Define ViewModel layer for session state
+   - Maintain single-activity Compose architecture (`MainActivity` + `NavHost`)
+   - Maintain navigation routes and arguments (`session_list`, `setup_wizard`, `desktop/{sessionId}`)
+   - Maintain dependency injection (Hilt) wiring for ViewModels and services
+   - Ensure UI observes `Flow`/`StateFlow` without manual lifecycle plumbing
 
 2. **Permission Management**
    - Request storage, network, foreground service permissions
@@ -127,10 +127,9 @@ Design and implement the Android application framework that manages Ubuntu sessi
    - Show explanatory UI for permission rationale
 
 3. **Session Management UI**
-   - Session list screen (create, delete, start, stop sessions)
-   - Session details screen (logs, stats, configuration)
-   - Session creation wizard (distro selection, configuration)
-   - Desktop activity (full-screen session view)
+   - Session list screen: create/delete/start/stop sessions
+   - Setup wizard screen: distro selection + session name + create session
+   - Desktop screen: placeholder surface for future rendering, stop control, basic state display
 
 4. **Settings & Configuration**
    - App settings (theme, notifications, storage)
@@ -151,34 +150,26 @@ Design and implement the Android application framework that manages Ubuntu sessi
   - Base activity and application classes
   - Dependency injection setup
 
-- [ ] **MainActivity**
-  - Permission request flow
-  - Navigation to setup wizard or session list
-  - App initialization checks
+- [ ] **MainActivity + Navigation**
+  - Permissions gate and request flow
+  - Compose `NavHost` routes and arguments
+  - Correct back stack behavior when setup completes
 
-- [ ] **SetupWizardActivity**
-  - First-run setup flow
-  - Distro selection screen
-  - Rootfs download initiation
-  - Progress display
+- [ ] **SetupWizard (Compose)**
+  - `ui/setup/SetupWizardScreen.kt` + `SetupWizardViewModel.kt`
+  - Create session via `UbuntuSessionManager.createSession(config)`
 
-- [ ] **SessionListActivity**
-  - RecyclerView of sessions
-  - FAB for creating new session
-  - Swipe-to-delete functionality
-  - Session status indicators
+- [ ] **SessionList (Compose)**
+  - `ui/session/SessionListScreen.kt` + `SessionListViewModel.kt`
+  - Observe sessions via `UbuntuSessionManager.listSessions(): Flow<List<UbuntuSession>>`
+  - Start/stop/delete actions using `Result`-based APIs
 
-- [ ] **DesktopActivity**
-  - Full-screen SurfaceView for desktop rendering
-  - Status bar with session info
-  - Keyboard handling
-  - Input method handling
+- [ ] **Desktop (Compose)**
+  - `ui/desktop/DesktopScreen.kt` + `DesktopViewModel.kt`
+  - Placeholder rendering surface (to be replaced by VNC/Wayland pipeline)
 
-- [ ] **SettingsFragment**
-  - App settings preferences
-  - Session-specific settings
-  - Storage usage display
-  - About and help
+- [ ] **Settings (Future)**
+  - Keep as planned work; no Settings screen exists yet in the Compose nav graph
 
 - [ ] **UbuntuSessionService**
   - Service implementation
@@ -199,8 +190,18 @@ Design and implement the Android application framework that manages Ubuntu sessi
 - Coordinates with Linux/PRoot Integration Agent for native bridge calls
 
 **Blocks:**
-- GUI implementation depends on DesktopActivity structure
+- GUI implementation depends on the desktop rendering pipeline (current `DesktopScreen` is a placeholder)
 - Testing depends on service and ViewModel completion
+
+### Current Code Touchpoints (Authoritative)
+
+- `app/src/main/java/com/udroid/app/MainActivity.kt` (permissions + Compose navigation)
+- `app/src/main/java/com/udroid/app/ui/session/SessionListScreen.kt`
+- `app/src/main/java/com/udroid/app/ui/session/SessionListViewModel.kt`
+- `app/src/main/java/com/udroid/app/ui/setup/SetupWizardScreen.kt`
+- `app/src/main/java/com/udroid/app/ui/setup/SetupWizardViewModel.kt`
+- `app/src/main/java/com/udroid/app/ui/desktop/DesktopScreen.kt` (placeholder)
+- `app/src/main/java/com/udroid/app/service/UbuntuSessionService.kt`
 
 ---
 
@@ -658,738 +659,85 @@ Each agent task is complete when:
 
 ---
 
-# Implementation Architecture Notes
+# Codebase Snapshot (Authoritative)
+
+This section is intentionally narrow: it documents what exists in this repository today and the conventions you should follow when modifying it.
+
+## Primary entry points
+
+- `app/src/main/java/com/udroid/app/MainActivity.kt`
+  - Permissions gate (`REQUIRED_PERMISSIONS`)
+  - Compose navigation (`NavHost`) routes:
+    - `permissions`
+    - `session_list`
+    - `setup_wizard`
+    - `desktop/{sessionId}`
+
+- `app/src/main/java/com/udroid/app/service/UbuntuSessionService.kt`
+  - Foreground service actions:
+    - `ACTION_START_SESSION`
+    - `ACTION_STOP_SESSION`
+  - Uses injected `UbuntuSessionManager` (Hilt)
+
+## Session management (contracts you must preserve)
+
+- `app/src/main/java/com/udroid/app/session/UbuntuSession.kt`
+  - `UbuntuSessionManager` is the public API used by UI + service
+  - `UbuntuSession` exposes:
+    - `state: SessionState`
+    - `stateFlow: Flow<SessionState>`
+    - `start()` / `stop()` / `exec(command)` as `Result`-returning suspend functions
+
+- `app/src/main/java/com/udroid/app/session/UbuntuSessionManagerImpl.kt`
+  - `UbuntuSessionManagerImpl` is the current implementation
+  - `UbuntuSessionImpl` is currently defined in this same file
+  - `UbuntuSessionImpl.start()` and `exec()` are stubs today; they still must:
+    - Update persisted session state via `SessionRepository.updateSessionState()`
+    - Return `Result.failure(...)` on invalid lifecycle transitions
+
+## Persistence model (single source of truth)
+
+- `app/src/main/java/com/udroid/app/storage/SessionRepository.kt`
+  - Uses DataStore Preferences
+  - Persists `SessionInfo` as JSON (`kotlinx.serialization`)
+  - Persists a set of IDs under `session_ids` as a comma-separated string
+  - Session state is persisted as `SessionStateData`
+  - Domain/data conversions are authoritative:
+    - `fun SessionStateData.toDomain(): SessionState`
+    - `fun SessionState.toData(): SessionStateData`
+
+## Domain model
+
+- `app/src/main/java/com/udroid/app/model/DistroVariant.kt`
+  - `DistroVariant` carries the distro id used for persistence and interop
+  - `SessionState` and `ProcessResult` live here
+
+## UI layer
+
+- `app/src/main/java/com/udroid/app/ui/setup/SetupWizardScreen.kt`
+- `app/src/main/java/com/udroid/app/ui/setup/SetupWizardViewModel.kt`
+- `app/src/main/java/com/udroid/app/ui/session/SessionListScreen.kt`
+- `app/src/main/java/com/udroid/app/ui/session/SessionListViewModel.kt`
+- `app/src/main/java/com/udroid/app/ui/desktop/DesktopScreen.kt` (placeholder rendering)
+
+UI conventions:
+
+- UI does not own state; ViewModels expose `StateFlow`
+- UI collects flows with `collectAsState()`
+- ViewModels call manager methods and handle `Result.fold(...)` with Timber logging
+
+## Native bridge
+
+- `app/src/main/java/com/udroid/app/nativebridge/NativeBridge.kt`
+  - Loads `udroid-native` if available
+  - Provides stubbed methods for launching/killing proot processes
+  - Any future JNI implementation must preserve method signatures or provide a migration plan
+
+## Conventions (keep context pristine)
+
+- **No invented architecture**: if a component is not present in this repo, describe it as planned work and keep it out of the “authoritative” sections.
+- **Prefer referencing file paths over paraphrasing** when documenting behavior.
+- **State writes**: if you change session lifecycle, ensure state transitions are persisted via `SessionRepository.updateSessionState()`.
+- **Error handling**: use `Result` and avoid throwing across UI/service boundaries.
+- **Logging**: use `Timber` consistently.
 
-## Phase 1: Foundation (COMPLETED ✅)
-
-### Implemented Components
-
-#### 1. Core Architecture
-**File:** `session/UbuntuSession.kt`
-- Interface definitions for session management
-- `UbuntuSessionManager` - CRUD operations for sessions
-- `UbuntuSession` - Individual session lifecycle
-- `SessionConfig` - Configuration data class
-
-**Design Decisions:**
-- Interfaces first: Define contracts before implementation
-- Coroutines + Flow: Reactive, async operations
-- Result types: Explicit error handling with `Result<T>`
-
-#### 2. Data Persistence Layer
-**File:** `storage/SessionRepository.kt`
-- DataStore for persistent storage
-- Serialization with kotlinx.serialization
-- Flow-based reactive data streams
-
-**Architecture Pattern:**
-```
-UI (Compose) 
-  ↓ observes Flow
-ViewModel
-  ↓ calls suspend functions
-Repository (DataStore)
-  ↓ serializes/deserializes
-Disk (DataStore prefs)
-```
-
-**Key Design:**
-- `SessionInfo` - Persistable data model
-- `SessionStateData` - Serializable state wrapper
-- Extension functions for domain ↔ data conversion
-- IDs stored as comma-separated string for O(1) lookup
-
-#### 3. Native Bridge (Stub)
-**File:** `native/NativeBridge.kt`
-- JNI interface placeholder
-- Stub implementations for all native operations
-- Graceful fallback when native lib unavailable
-
-**Future Native Functions:**
-```kotlin
-external fun launchProot(...)
-external fun waitForProot(...)
-external fun killProot(...)
-external fun getProotStdout(...)
-external fun getProotStderr(...)
-```
-
-#### 4. Session Manager Implementation
-**File:** `session/UbuntuSessionManagerImpl.kt`
-- Full CRUD operations for sessions
-- State synchronization with repository
-- Process lifecycle management
-
-**Session Lifecycle:**
-```
-Created → Starting → Running (vncPort) → Stopping → Stopped
-                    ↓
-                  Error (message)
-```
-
-**Key Features:**
-- UUID-based session IDs
-- Automatic state persistence on changes
-- Cleanup on session delete (stop if running)
-
-#### 5. Foreground Service
-**File:** `service/UbuntuSessionService.kt`
-- Foreground service for session management
-- Notification with stop action
-- Binder interface for activity communication
-
-**Notification Architecture:**
-```
-Service creates notification
-  ↓
-User can tap notification → Open MainActivity
-User can tap Stop → Stop session via Service
-```
-
-#### 6. UI Layer (Jetpack Compose)
-
-##### Setup Wizard
-**Files:** 
-- `ui/setup/SetupWizardViewModel.kt`
-- `ui/setup/SetupWizardScreen.kt`
-
-**Flow:**
-1. User selects distro (4 options)
-2. User enters session name
-3. Click "Create Session"
-4. ViewModel calls SessionManager.createSession()
-5. On success, navigate back to session list
-
-##### Session List
-**Files:**
-- `ui/session/SessionListViewModel.kt`
-- `ui/session/SessionListScreen.kt`
-
-**Features:**
-- RecyclerView of all sessions
-- FAB to create new session
-- Start/Stop buttons per session
-- Delete with confirmation dialog
-- Empty state when no sessions
-- State badges (Created, Starting, Running, etc.)
-
-##### Navigation
-**File:** `MainActivity.kt` - Updated with NavHost
-
-**Navigation Graph:**
-```
-permissions → session_list
-                   ↓
-              setup_wizard
-```
-
-**Pattern:** Navigation as state, simple composable destinations
-
-### Technology Stack Summary
-
-**Framework:** Jetpack Compose (no XML layouts)
-**DI:** Hilt (compile-time dependency injection)
-**Async:** Kotlin Coroutines + Flow
-**Persistence:** DataStore Preferences (not SharedPreferences)
-**Serialization:** kotlinx.serialization (JSON)
-**Logging:** Timber
-**Navigation:** Compose Navigation
-**Theme:** Material 3 with Ubuntu brand colors
-
----
-
-## Architecture Patterns Used
-
-### 1. Repository Pattern
-```kotlin
-// Single source of truth for session data
-interface SessionRepository {
-    suspend fun saveSession(session: SessionInfo)
-    fun observeSessions(): Flow<List<SessionInfo>>
-}
-```
-
-### 2. ViewModel Pattern
-```kotlin
-@HiltViewModel
-class SessionListViewModel @Inject constructor(
-    private val sessionManager: UbuntuSessionManager
-) : ViewModel()
-```
-
-### 3. Dependency Injection
-```kotlin
-@HiltAndroidApp
-class UdroidApplication : Application()
-
-@AndroidEntryPoint
-class MainActivity : ComponentActivity()
-```
-
-### 4. State Management
-```kotlin
-// Single source of truth in ViewModel
-private val _sessions = MutableStateFlow<List<Session>>(emptyList())
-val sessions: StateFlow<List<Session>> = _sessions.asStateFlow()
-
-// UI observes
-val sessions by viewModel.sessions.collectAsState()
-```
-
-### 5. Result Types
-```kotlin
-// Explicit error handling
-suspend fun createSession(config: SessionConfig): Result<UbuntuSession>
-
-// Usage
-result.fold(
-    onSuccess = { session -> /* handle success */ },
-    onFailure = { error -> /* handle error */ }
-)
-```
-
----
-
-## File Organization
-
-```
-app/src/main/java/com/udroid/app/
-├── model/                    # Domain models (sealed classes, enums)
-│   └── DistroVariant.kt
-├── session/                  # Business logic (interfaces + impl)
-│   ├── UbuntuSession.kt      # Interfaces
-│   └── UbuntuSessionManagerImpl.kt
-├── storage/                  # Data persistence
-│   └── SessionRepository.kt
-├── native/                   # JNI bridge
-│   └── NativeBridge.kt
-├── service/                  # Android services
-│   └── UbuntuSessionService.kt
-└── ui/                       # Compose UI
-    ├── theme/                # Material 3 theming
-    ├── setup/                # Setup wizard
-    │   ├── SetupWizardViewModel.kt
-    │   └── SetupWizardScreen.kt
-    └── session/              # Session management
-        ├── SessionListViewModel.kt
-        └── SessionListScreen.kt
-```
-
----
-
-## Data Flow Diagrams
-
-### Creating a Session
-```
-User clicks "Create" in SetupWizardScreen
-  ↓
-SetupWizardViewModel.createSession()
-  ↓
-UbuntuSessionManager.createSession(config)
-  ↓
-SessionRepository.saveSession(info)
-  ↓
-DataStore persists to disk
-  ↓
-_setupComplete.value = sessionId
-  ↓
-LaunchedEffect navigates to SessionListScreen
-  ↓
-SessionListViewModel observes new session via Flow
-  ↓
-UI recomposes with new session in list
-```
-
-### Starting a Session
-```
-User clicks Play button in SessionListScreen
-  ↓
-SessionListViewModel.startSession(sessionId)
-  ↓
-UbuntuSessionManager.startSession(sessionId)
-  ↓
-UbuntuSessionImpl.start()
-  ↓
-State: Created → Starting
-  ↓
-SessionRepository.updateSessionState()
-  ↓
-NativeBridge.launchProot() [STUB - will be JNI call]
-  ↓
-State: Starting → Running(vncPort)
-  ↓
-SessionRepository.updateSessionState()
-  ↓
-Flow emits new state to all observers
-  ↓
-UI recomposes with "Running" badge
-```
-
----
-
-## Key Design Decisions
-
-### 1. DataStore over SharedPreferences
-**Why:**
-- Coroutines-based (no blocking main thread)
-- Type-safe with Flow
-- Transactional updates
-- Migration path to Room database if needed
-
-### 2. Flow over LiveData
-**Why:**
-- Part of Kotlin coroutines ecosystem
-- Transformations operators (map, filter)
-- Not tied to Android lifecycle
-- Works with DataStore out of the box
-
-### 3. Compose over XML
-**Why:**
-- Declarative UI
-- Less boilerplate
-- State management built-in
-- Modern Android best practice
-- Preview tooling
-
-### 4. Hilt over Koin
-**Why:**
-- Compile-time validation
-- Better performance (no reflection)
-- Google recommended
-- ViewModel injection support
-- Works with Compose Navigation
-
-### 5. Single Activity Architecture
-**Why:**
-- Navigation Compose handles back stack
-- Easier state management
-- Performance (single process)
-- Modern Android pattern
-
-### 6. Interface-First Design
-**Why:**
-- Easy testing (can mock interfaces)
-- Parallel development (define contracts)
-- Flexibility (swap implementations)
-- Clear boundaries between layers
-
----
-
-## Testing Strategy
-
-### Unit Tests (Not Yet Implemented)
-```kotlin
-class SessionListViewModelTest {
-    @Test
-    fun `deleteSession should call sessionManager delete`() = runTest {
-        // Given
-        val mockSessionManager = mockk<UbuntuSessionManager>()
-        val viewModel = SessionListViewModel(mockSessionManager)
-        
-        // When
-        viewModel.deleteSession("session-id")
-        
-        // Then
-        coVerify { mockSessionManager.deleteSession("session-id") }
-    }
-}
-```
-
-### Integration Tests (Not Yet Implemented)
-```kotlin
-@RunWith(AndroidJUnit4::class)
-class SessionListScreenTest {
-    @get:Rule
-    val composeTestRule = createComposeRule()
-    
-    @Test
-    fun `clicking FAB navigates to setup wizard`() {
-        composeTestRule.setContent {
-            SessionListScreen(
-                onCreateSession = { /* verify */ },
-                onSessionClick = {}
-            )
-        }
-        
-        composeTestRule
-            .onNodeWithContentDescription("Create Session")
-            .performClick()
-        
-        // Verify navigation
-    }
-}
-```
-
----
-
-## Known Limitations
-
-### Current Stub Implementations
-1. **NativeBridge** - No actual PRoot execution
-   - TODO: Implement JNI bridge
-   - TODO: Port PRoot to Android
-
-2. **Rootfs Download** - Not implemented
-   - TODO: Create RootfsDownloadService
-   - TODO: Add download UI to SetupWizard
-
-3. **Desktop Surface** - Not implemented
-   - TODO: Create DesktopActivity with SurfaceView
-   - TODO: Implement VNC client
-
-4. **VNC Server** - Not started
-   - TODO: Integrate VNC server startup in session launch
-   - TODO: Implement VncBridgeService
-
-### Session Persistence
-- Data stored in DataStore Preferences
-- Not encrypted (future: use DataStore Proto or EncryptedSharedPreferences)
-- No backup/restore (future: integrate with Android auto-backup)
-
-### State Synchronization
-- No conflict resolution (single-user app)
-- No multi-device sync (by design)
-
----
-
-## Next Implementation Phases
-
-### Phase 2: Core Services (In Progress)
-- [ ] Implement actual PRoot execution
-- [ ] Add rootfs download UI
-- [ ] Create DesktopActivity stub
-- [ ] Implement VNC bridge stub
-
-### Phase 3: Native Integration
-- [ ] Port PRoot to Android
-- [ ] Create JNI bridge
-- [ ] Implement VNC client
-
-### Phase 4: Polish
-- [ ] Error handling improvements
-- [ ] Loading states
-- [ ] Progress indicators
-- [ ] Unit tests
-- [ ] Documentation
-
----
-
-## Dependencies Added
-
-### Core Android
-- androidx.core:core-ktx:1.12.0
-- androidx.lifecycle:lifecycle-*:2.7.0
-- androidx.activity:activity-compose:1.8.1
-
-### Compose
-- androidx.compose.*:compose-bom:2023.10.01
-- androidx.compose.material3:material3
-
-### Navigation
-- androidx.navigation:navigation-compose:2.7.5
-
-### Dependency Injection
-- com.google.dagger:hilt-android:2.48
-- androidx.hilt:hilt-navigation-compose:1.1.0
-
-### Async
-- org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3
-
-### Persistence
-- androidx.datastore:datastore-preferences:1.0.0
-- org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0
-
-### Work Manager
-- androidx.work:work-runtime-ktx:2.9.0
-
-### Logging
-- com.jakewharton.timber:timber:5.0.1
-
-### Testing
-- junit:junit:4.13.2
-- org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3
-- io.mockk:mockk:1.13.8
-- androidx.test.ext:junit:1.1.5
-- androidx.test.espresso:espresso-core:3.5.1
-
----
-
-## Build Configuration
-
-### Gradle Versions
-- Gradle: 8.2
-- Android Gradle Plugin: 8.2.0
-- Kotlin: 1.9.20
-- Hilt: 2.48
-- KSP: 1.9.20-1.0.14
-
-### App Configuration
-- compileSdk: 34
-- minSdk: 26
-- targetSdk: 34
-- namespace: com.udroid.app
-
-### ABIs Supported
-- arm64-v8a (64-bit ARM - most modern phones)
-- armeabi-v7a (32-bit ARM - older phones)
-- x86_64 (64-bit x86 - emulators, Intel devices)
-
-### Build Variants
-- debug: .debug suffix, debuggable
-- release: minify + shrinkResources, ProGuard
-- staging: .staging suffix, minified
-
----
-
-## Performance Considerations
-
-### Optimizations Applied
-1. **LazyColumn** instead of Column for lists (lazy loading)
-2. **derivedStateOf** not needed yet (no complex computations)
-3. **remember** for expensive computations
-4. **Flow** vs **LiveData** - Flow is more flexible
-
-### Future Optimizations
-- [ ] Paging library for large session lists
-- [ ] LazyRow/Grid for distro selection
-- [ ] Image loading caching for distro thumbnails
-- [ ] Database indexes if migrating to Room
-- [ ] Background coroutine dispatchers (IO vs Default)
-
----
-
-## Accessibility
-
-### Current Support
-- Content descriptions on buttons
-- Semantic headings (titleLarge, headlineMedium)
-- Sufficient color contrast (Material 3 default)
-
-### TODO
-- [ ] Screen reader announcements for state changes
-- [ ] Touch target size (48dp minimum)
-- [ ] Keyboard navigation support
-- [ ] High contrast mode
-- [ ] Font scaling support
-
----
-
-## Security Considerations
-
-### Current State
-- Permissions requested at runtime
-- No sensitive data in logs
-- HTTPS only for network (usesCleartextTraffic=false)
-
-### TODO
-- [ ] Encrypt session data at rest
-- [ ] Certificate pinning for downloads
-- [ ] Rootfs signature verification
-- [ ] Sandbox isolation for PRoot
-- [ ] SELinux policies
-
----
-
-## Monitoring & Analytics
-
-### Current State
-- Timber logging for development
-- No crash reporting
-- No analytics
-
-### TODO
-- [ ] Add Firebase Crashlytics
-- [ ] Add analytics for:
-  - Session creation rate
-  - Session success/failure rate
-  - Most popular distros
-  - Device performance metrics
-- [ ] Performance monitoring
-- [ ] Crash-free users metric
-
----
-
-## Localization
-
-### Current State
-- All strings hardcoded in English
-- No resource qualifiers for other languages
-
-### TODO
-- [ ] Extract all strings to strings.xml
-- [ ] Add translations (Spanish, Chinese, etc.)
-- [ ] RTL layout support
-- [ ] Locale-aware formatting (dates, numbers)
-
----
-
-## Offline Support
-
-### Current State
-- No offline functionality
-- Session list persists locally (DataStore)
-- No network calls yet
-
-### TODO
-- [ ] Cache rootfs metadata
-- [ ] Download resume support
-- [ ] Offline session creation (if rootfs downloaded)
-- [ ] Network status indicator
-
----
-
-## Backward Compatibility
-
-### Strategy
-- Min SDK 26 (Android 8.0) - 98%+ coverage
-- No reflection (Hilt compile-time)
-- No deprecated APIs
-- Forward-compatible with Android 14+
-
-### Migration Path
-- DataStore provides built-in migration
-- Room can replace DataStore if needed
-- Backup/restore via Android auto-backup
-
----
-
-## Debugging
-
-### Tools
-- Timber for logging
-- Hilt dependency graph verification
-- Layout Inspector for Compose
-- Network Inspector (for future downloads)
-- Database Inspector (for DataStore/Rom)
-
-### Common Issues
-1. **Hilt not injecting** - Check @HiltAndroidApp, @AndroidEntryPoint
-2. **Navigation not working** - Verify NavHost setup, startDestination
-3. **Flow not emitting** - Ensure collectAsState() in Composable
-4. **Permissions** - Check manifest + runtime requests
-
----
-
-## Performance Profiling
-
-### Tools to Use
-- Android Studio Profiler (CPU, Memory, Network)
-- Compose Compiler metrics
-- Macrobenchmark (future)
-- Baseline Profiles (future)
-
-### Metrics to Track
-- App startup time (< 3 seconds)
-- Session creation time (< 5 seconds)
-- Session startup time (< 10 seconds)
-- Memory usage (< 200MB baseline)
-- Battery usage (optimize later)
-
----
-
-## Code Quality
-
-### Standards
-- Kotlin coding conventions
-- Compose best practices
-- No hardcoded dimensions (use dimens.xml)
-- No magic numbers (extract to constants)
-- Meaningful variable names
-- KDoc comments for public APIs
-
-### Lint Checks
-- Android Lint enabled
-- Detekt (static analysis) - TODO
--ktlint (formatting) - TODO
-- Unused resources check
-
----
-
-## Documentation
-
-### Completed
-- [x] ARCHITECTURE.md - System design
-- [x] AGENTS.md - Agent charters + THIS SECTION
-- [x] TASKS.md - Task breakdown
-- [x] SCAFFOLD.md - Project scaffold
-- [x] PROGRESS.md - Implementation status
-- [x] README.md - Project overview
-
-### TODO
-- [ ] API documentation (KDoc)
-- [ ] Developer guide
-- [ ] User guide
-- [ ] Troubleshooting guide
-- [ ] Architecture decision records (ADRs)
-
----
-
-## Deployment
-
-### Distribution Channels
-- GitHub Releases (open source)
-- Google Play Store (future - needs account)
-- F-Droid (future - needs publishing)
-- Direct APK download (from releases)
-
-### Signing
-- Debug: Default debug keystore
-- Release: Release keystore (not committed)
-- APK splits by ABI for smaller downloads
-
-### Versioning
-- Semantic versioning (MAJOR.MINOR.PATCH)
-- Build number increments with each build
-- Version name displayed in settings
-
----
-
-## Contributing
-
-### Getting Started
-1. Clone repository
-2. Open in Android Studio
-3. Sync Gradle
-4. Run on device/emulator
-5. Pick a task from PROGRESS.md
-
-### Coding Standards
-- Follow Kotlin style guide
-- Write unit tests for ViewModels
-- Update documentation for API changes
-- Run lint before committing
-
-### Pull Request Process
-1. Fork repository
-2. Create feature branch
-3. Make changes
-4. Add tests
-5. Update documentation
-6. Submit PR with description
-
----
-
-## Release Notes
-
-### v0.1.0 (Current - Development)
-**Features:**
-- Session management UI
-- Create/delete/start/stop sessions
-- 4 Ubuntu distro options (Jammy XFCE4, MATE, GNOME, Noble)
-- Persistent session storage
-- Permission handling
-- Material 3 theming
-
-**Limitations:**
-- No actual Ubuntu execution (stub)
-- No rootfs download
-- No desktop display
-- Testing not implemented
-
-**Next Release (v0.2.0):**
-- Implement actual PRoot execution
-- Add rootfs download
-- Create desktop surface
-- Add unit tests
-
----

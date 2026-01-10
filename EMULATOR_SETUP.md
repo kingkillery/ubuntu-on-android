@@ -201,8 +201,6 @@ adb shell am start -n com.udroid.app.debug/.MainActivity
 ### Permission Issues
 ```bash
 # Grant permissions via ADB
-adb shell pm grant com.udroid.app.debug android.permission.READ_EXTERNAL_STORAGE
-adb shell pm grant com.udroid.app.debug android.permission.WRITE_EXTERNAL_STORAGE
 adb shell pm grant com.udroid.app.debug android.permission.INTERNET
 ```
 

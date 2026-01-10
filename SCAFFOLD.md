@@ -2,6 +2,8 @@
 
 This document provides the initial Android project structure and configuration files for the Ubuntu-on-Android standalone app.
 
+This file is a historical scaffold snapshot and may include planned components that are not implemented. For the authoritative, current structure and entry points, see `AGENTS.md` and `README.md`.
+
 ---
 
 ## Project Structure
@@ -16,21 +18,16 @@ ubuntu-on-android/
 │   │   │   │   ├── UdroidApplication.kt
 │   │   │   │   ├── ui/
 │   │   │   │   │   ├── setup/
-│   │   │   │   │   │   ├── SetupWizardActivity.kt
-│   │   │   │   │   │   ├── DistroSelectionFragment.kt
-│   │   │   │   │   │   └── SetupViewModel.kt
+│   │   │   │   │   │   ├── SetupWizardScreen.kt
+│   │   │   │   │   │   └── SetupWizardViewModel.kt
 │   │   │   │   │   ├── session/
-│   │   │   │   │   │   ├── SessionListActivity.kt
-│   │   │   │   │   │   ├── SessionDetailsActivity.kt
-│   │   │   │   │   │   ├── SessionListAdapter.kt
+│   │   │   │   │   │   ├── SessionListScreen.kt
 │   │   │   │   │   │   └── SessionListViewModel.kt
 │   │   │   │   │   ├── desktop/
 │   │   │   │   │   │   ├── DesktopActivity.kt
-│   │   │   │   │   │   ├── DesktopSurfaceView.kt
+│   │   │   │   │   │   ├── DesktopScreen.kt
 │   │   │   │   │   │   └── DesktopViewModel.kt
-│   │   │   │   │   └── settings/
-│   │   │   │   │       ├── SettingsActivity.kt
-│   │   │   │   │       └── SettingsFragment.kt
+│   │   │   │   │   └── settings/              # planned (no settings UI in current nav graph)
 │   │   │   │   ├── service/
 │   │   │   │   │   ├── UbuntuSessionService.kt
 │   │   │   │   │   ├── RootfsDownloadService.kt
@@ -40,29 +37,19 @@ ubuntu-on-android/
 │   │   │   │   │   ├── UbuntuSession.kt
 │   │   │   │   │   └── SessionConfig.kt
 │   │   │   │   ├── rootfs/
-│   │   │   │   │   ├── RootfsManager.kt
-│   │   │   │   │   ├── RootfsDownloader.kt
-│   │   │   │   │   └── RootfsExtractor.kt
+│   │   │   │   │   └── RootfsManager.kt
 │   │   │   │   ├── storage/
-│   │   │   │   │   ├── StorageManager.kt
 │   │   │   │   │   └── SessionRepository.kt
-│   │   │   │   ├── native/
+│   │   │   │   ├── nativebridge/
 │   │   │   │   │   ├── NativeBridge.kt
-│   │   │   │   │   ├── ProotLauncher.kt
-│   │   │   │   │   └── JniLibraryLoader.kt
+│   │   │   │   │   └── (native helpers planned)
 │   │   │   │   └── model/
 │   │   │   │       ├── DistroVariant.kt
 │   │   │   │       ├── SessionState.kt
 │   │   │   │       └── SessionInfo.kt
 │   │   │   ├── res/
 │   │   │   │   ├── drawable/
-│   │   │   │   ├── layout/
-│   │   │   │   │   ├── activity_main.xml
-│   │   │   │   │   ├── activity_setup_wizard.xml
-│   │   │   │   │   ├── activity_session_list.xml
-│   │   │   │   │   ├── activity_desktop.xml
-│   │   │   │   │   ├── item_session.xml
-│   │   │   │   │   └── fragment_settings.xml
+│   │   │   │   ├── layout/                # legacy XML layouts (Compose is primary UI)
 │   │   │   │   ├── values/
 │   │   │   │   │   ├── strings.xml
 │   │   │   │   │   ├── colors.xml
@@ -84,7 +71,7 @@ ubuntu-on-android/
 │   │   └── androidTest/
 │   │       └── java/com/udroid/app/
 │   │           └── ui/
-│   │               └── SessionListActivityTest.kt
+│   │               └── (Compose UI tests planned)
 │   ├── build.gradle.kts
 │   └── proguard-rules.pro
 ├── gradle/
@@ -377,18 +364,6 @@ dependencies {
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- For Android 12 and below -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-
-    <!-- For Android 13+ -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"
-        android:minSdkVersion="33" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"
-        android:minSdkVersion="33" />
-
     <application
         android:name=".UdroidApplication"
         android:allowBackup="false"
@@ -413,18 +388,6 @@ dependencies {
             </intent-filter>
         </activity>
 
-        <!-- Setup Wizard Activity -->
-        <activity
-            android:name=".ui.setup.SetupWizardActivity"
-            android:exported="false"
-            android:theme="@style/Theme.Udroid" />
-
-        <!-- Session List Activity -->
-        <activity
-            android:name=".ui.session.SessionListActivity"
-            android:exported="false"
-            android:theme="@style/Theme.Udroid" />
-
         <!-- Desktop Activity -->
         <activity
             android:name=".ui.desktop.DesktopActivity"
@@ -433,12 +396,6 @@ dependencies {
             android:configChanges="orientation|keyboardHidden|screenSize"
             android:screenOrientation="landscape"
             android:hardwareAccelerated="true" />
-
-        <!-- Settings Activity -->
-        <activity
-            android:name=".ui.settings.SettingsActivity"
-            android:exported="false"
-            android:theme="@style/Theme.Udroid" />
 
         <!-- Ubuntu Session Service -->
         <service
@@ -456,29 +413,7 @@ dependencies {
             android:name=".service.RootfsDownloadService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="dataProcessing" />
-
-        <!-- VNC Bridge Service -->
-        <service
-            android:name=".service.VncBridgeService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="vnc_bridge" />
-        </service>
-
-        <!-- File provider for sharing -->
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
-        </provider>
+            android:foregroundServiceType="specialUse" />
 
     </application>
 
@@ -653,7 +588,7 @@ enum class DesktopEnvironment(val displayName: String) {
 ## JNI Bridge Signatures
 
 ```kotlin
-package com.udroid.app.native
+package com.udroid.app.nativebridge
 
 /**
  * Native bridge for launching and managing PRoot processes.

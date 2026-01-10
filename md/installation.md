@@ -1,5 +1,14 @@
 # Installation
 
+This document describes the legacy **Termux-based** installation flow for the upstream udroid/ubuntu-on-android project.
+
+It is not the installation guide for this repository’s standalone Android app.
+
+For this repo, start here:
+
+- `README.md` (project status + how to run in Android Studio)
+- `ARCHITECTURE.md` (current app architecture)
+
 - First install termux from [termux.com](https://termux.com) or [F-Droid!](https://f-droid.org/en/packages/com.termux/)
 - For display, you can use [Xwayland](https://github.com/termux/termux-x11) too. 
 

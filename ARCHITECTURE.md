@@ -4,6 +4,8 @@
 
 This document outlines the transformation of **udroid** (Termux-based Ubuntu PRoot environment) into a **native Android application** that provides a complete Ubuntu desktop experience within an app sandbox.
 
+This repository currently contains a working **Android app shell** (Compose UI, persistence, services) and stubs for the Ubuntu runtime. Sections below explicitly distinguish **implemented today** vs **planned** components.
+
 ### Current State (udroid/Termux)
 - **Installation**: Bash script (`install.sh`) that clones `fs-manager-udroid` repo
 - **Runtime**: Requires Termux app + PRoot for chroot-like environment
@@ -27,22 +29,22 @@ This document outlines the transformation of **udroid** (Termux-based Ubuntu PRo
 │                     Android Application Layer                    │
 ├─────────────────────────────────────────────────────────────────┤
 │  UI Layer:                                                      │
-│  • MainActivity (permissions, setup wizard)                     │
-│  • SessionListActivity (manage multiple Ubuntu instances)       │
-│  • DesktopActivity (full-screen desktop view)                   │
-│  • SettingsFragment (configuration, storage, updates)           │
+│  • MainActivity (permissions gate + Compose NavHost)            │
+│  • SetupWizardScreen (Compose)                                  │
+│  • SessionListScreen (Compose)                                  │
+│  • DesktopScreen (Compose placeholder)                          │
+│  • DesktopActivity (thin wrapper that hosts DesktopScreen)      │
 ├─────────────────────────────────────────────────────────────────┤
 │  Service Layer:                                                 │
 │  • UbuntuSessionService (lifecycle management)                  │
-│  • RootfsDownloadService (download, verify, extract)            │
-│  • VncBridgeService (connects VNC to Android Surface)           │
-│  • LogMonitorService (capture and surface logs)                 │
+│  • RootfsDownloadService (download + extract stub)              │
+│  • VncBridgeService (planned)                                   │
+│  • LogMonitorService (planned)                                  │
 ├─────────────────────────────────────────────────────────────────┤
 │  Native Layer (JNI):                                            │
-│  • libproot-android (PRoot compiled for Android)                │
-│  • libvncbridge (VNC → Android Surface translation)             │
-│  • libtermux-exec (command execution bridge)                    │
-│  • libinput-bridge (touch/keyboard → X11 events)                │
+│  • udroid-native (JNI bridge; native build exists, runtime is WIP)
+│  • libproot-android (planned)                                   │
+│  • libvncbridge (planned)                                       │
 ├─────────────────────────────────────────────────────────────────┤
 │  Filesystem Layer:                                              │
 │  • /data/data/com.udroid.app/files/ubuntu/ (rootfs)            │
@@ -63,50 +65,45 @@ This document outlines the transformation of **udroid** (Termux-based Ubuntu PRo
 - Provide setup wizard for first-time users
 - Expose session management APIs (start, stop, monitor status)
 
-**Key Classes:**
+**Authoritative contracts (implemented today):**
+
+- Session API: `app/src/main/java/com/udroid/app/session/UbuntuSession.kt`
+- Session implementation: `app/src/main/java/com/udroid/app/session/UbuntuSessionManagerImpl.kt`
+- Foreground session service: `app/src/main/java/com/udroid/app/service/UbuntuSessionService.kt`
+- Rootfs download service: `app/src/main/java/com/udroid/app/service/RootfsDownloadService.kt`
+- App navigation: `app/src/main/java/com/udroid/app/MainActivity.kt`
+
+- Native bridge stub: `app/src/main/java/com/udroid/app/nativebridge/NativeBridge.kt`
+
 ```kotlin
-// Core session management
-class UbuntuSessionManager {
-    fun createSession(config: SessionConfig): UbuntuSession
-    fun listSessions(): List<UbuntuSession>
-    fun getSession(id: String): UbuntuSession?
+// app/src/main/java/com/udroid/app/session/UbuntuSession.kt
+interface UbuntuSessionManager {
+    suspend fun createSession(config: SessionConfig): Result<UbuntuSession>
+    fun listSessions(): kotlinx.coroutines.flow.Flow<List<UbuntuSession>>
+    suspend fun getSession(sessionId: String): UbuntuSession?
+    suspend fun deleteSession(sessionId: String): Result<Unit>
+    suspend fun startSession(sessionId: String): Result<Unit>
+    suspend fun stopSession(sessionId: String): Result<Unit>
 }
 
-class UbuntuSession {
+interface UbuntuSession {
     val id: String
-    val distro: DistroVariant
-    val state: SessionState
-    fun start()
-    fun stop()
-    fun exec(command: String): ProcessResult
-}
+    val config: SessionConfig
+    val state: com.udroid.app.model.SessionState
+    val stateFlow: kotlinx.coroutines.flow.Flow<com.udroid.app.model.SessionState>
 
-// Service layer
-class UbuntuSessionService : Service() {
-    private val sessions = mutableMapOf<String, SessionProcess>()
-    fun startSession(sessionId: String)
-    fun stopSession(sessionId: String)
-}
-
-// UI Layer
-class MainActivity : AppCompatActivity() {
-    fun onRequestPermissions()
-    fun navigateToSetup()
-    fun showSessionList()
-}
-
-class DesktopActivity : AppCompatActivity() {
-    private lateinit var surfaceView: DesktopSurfaceView
-    private lateinit var inputHandler: DesktopInputHandler
-    fun connectToSession(sessionId: String)
+    suspend fun start(): Result<Unit>
+    suspend fun stop(): Result<Unit>
+    suspend fun exec(command: String): Result<com.udroid.app.model.ProcessResult>
 }
 ```
 
 **Permission Requirements:**
 - `android.permission.INTERNET` (rootfs downloads, networking)
-- `android.permission.WRITE_EXTERNAL_STORAGE` (rootfs storage)
-- `android.permission.FOREGROUND_SERVICE` (run Ubuntu in background)
-- `android.permission.WAKE_LOCK` (prevent sleep during desktop session)
+- `android.permission.ACCESS_NETWORK_STATE` (network status)
+- `android.permission.WAKE_LOCK` (prevent sleep during long-running work)
+- `android.permission.FOREGROUND_SERVICE` (foreground services)
+- `android.permission.FOREGROUND_SERVICE_SPECIAL_USE` (special-use foreground service subtype)
 - `android.permission.POST_NOTIFICATIONS` (session status updates)
 
 ---
@@ -132,94 +129,35 @@ Original (Termux):
 Target (Android App):
   → App provides bash via native binary (bundled)
   → App manages rootfs in app-specific files directory
-  → UbuntuSessionService.start() launches proot + init
-  → VNC bridge service auto-starts with session
-  → DesktopActivity renders VNC to native Surface
+  → UbuntuSessionService handles start/stop actions (runtime launch is still WIP)
+  → Desktop UI exists today as Compose screens; desktop rendering pipeline is planned
 ```
 
 **Key Components:**
 
-**A. Native Binary Bundling**
-```
-app/src/main/jni/
-  ├── proot/           # PRoot compiled for Android (AArch64, ARMv7, x86_64)
-  ├── bash/            # Bash shell binary
-  ├── busybox/         # Core utilities
-  ├── proot-distro/    # Modified proot-distro for Android paths
-  └── lib/             # Native libraries (.so files)
-      ├── libproot-android.so
-      ├── libvncbridge.so
-      └── libtermux-exec.so
-```
+**A. Native build integration (implemented, runtime WIP)**
 
-**B. Rootfs Management**
-```kotlin
-class RootfsManager {
-    private val rootfsDir = File(context.filesDir, "ubuntu/rootfs")
-    private val cacheDir = File(context.cacheDir, "downloads")
+- Native sources + CMake: `native/` and `native/CMakeLists.txt`
+- Native build script: `scripts/build-native.sh`
 
-    suspend fun downloadRootfs(
-        distro: DistroVariant,
-        onProgress: (Int) -> Unit
-    ): Result<File>
+**B. Rootfs Management (implemented today, extraction is a stub)**
 
-    fun verifyRootfs(file: File, checksum: String): Boolean
-    fun extractRootfs(archive: File): Result<Unit>
-    fun getInstalledRootfs(): List<DistroVariant>
-    fun deleteRootfs(distro: DistroVariant)
-}
-
-enum class DistroVariant(val id: String, val downloadUrl: String) {
-    JAMMY_XFCE4("jammy:xfce4", "..."),
-    JAMMY_MATE("jammy:mate", "..."),
-    JAMMY_GNOME("jammy:gnome", "..."),
-    NOBLE_RAW("noble:raw", "...")
-}
-```
+- Rootfs manager: `app/src/main/java/com/udroid/app/rootfs/RootfsManager.kt`
+- Download service: `app/src/main/java/com/udroid/app/service/RootfsDownloadService.kt`
 
 **C. Session Launch Pipeline**
-```kotlin
-class UbuntuSessionManager {
-    fun startSession(session: UbuntuSession) {
-        // 1. Verify rootfs exists
-        if (!rootfsManager.isInstalled(session.distro)) {
-            throw RootfsNotInstalledException()
-        }
 
-        // 2. Prepare session directory
-        val sessionDir = prepareSessionDir(session.id)
+Implemented today:
 
-        // 3. Generate proot command
-        val prootCmd = buildProotCommand(
-            rootfs = rootfsManager.getRootfsPath(session.distro),
-            sessionDir = sessionDir,
-            env = buildEnvVars(session)
-        )
+- `UbuntuSessionManager.startSession(sessionId)` delegates to `UbuntuSession.start()`.
+- Session lifecycle state is persisted via `SessionRepository.updateSessionState(...)`.
+- Process launch is currently stubbed (see TODOs in `UbuntuSessionImpl.start()`).
 
-        // 4. Launch native process via JNI
-        nativeProcess = launchProotProcess(prootCmd)
+Authoritative files:
 
-        // 5. Wait for VNC server to start
-        waitForVncServer(sessionDir)
-
-        // 6. Notify UI ready
-        session.state = SessionState.RUNNING
-    }
-
-    private fun buildProotCommand(
-        rootfs: File,
-        sessionDir: File,
-        env: Map<String, String>
-    ): List<String> = listOf(
-        "proot",
-        "--rootfs", rootfs.absolutePath,
-        "--bind", "$sessionDir:/home/ubuntu_session",
-        "--bind", "/sdcard:/mnt/sdcard",
-        "--kill-on-exit",
-        "/bin/bash", "-c", "export DISPLAY=:1 && vncserver :1 && tail -f /dev/null"
-    )
-}
-```
+- `app/src/main/java/com/udroid/app/session/UbuntuSession.kt`
+- `app/src/main/java/com/udroid/app/session/UbuntuSessionManagerImpl.kt`
+- `app/src/main/java/com/udroid/app/storage/SessionRepository.kt`
 
 ---
 
@@ -248,81 +186,14 @@ XOrg server → libxorg-android.so → Android SurfaceControl
 - **Pros**: Full X11 compatibility
 - **Cons**: Complex native integration
 
-**VNC Bridge Implementation:**
-```kotlin
-class VncBridgeService : Service() {
-    private lateinit var vncClient: VncClient
-    private lateinit var surfaceRenderer: SurfaceRenderer
+**Current implementation:**
 
-    fun connectToSession(sessionId: String, host: String, port: Int) {
-        vncClient = VncClient(host, port)
-        vncClient.setFramebufferCallback { buffer ->
-            surfaceRenderer.updateFrame(buffer)
-        }
-        vncClient.connect()
-    }
+- Desktop UI entry point: `app/src/main/java/com/udroid/app/ui/desktop/DesktopScreen.kt`
+- Desktop host activity: `app/src/main/java/com/udroid/app/ui/desktop/DesktopActivity.kt`
 
-    fun sendInputEvent(event: InputEvent) {
-        when (event) {
-            is TouchEvent -> vncClient.sendPointerEvent(event.x, event.y, event.mask)
-            is KeyEvent -> vncClient.sendKeyEvent(event.keyCode, event.isDown)
-        }
-    }
-}
+Desktop rendering is currently a placeholder; VNC/Wayland/Xserver integration remains planned work.
 
-class DesktopSurfaceView : SurfaceView {
-    private val renderer = SurfaceRenderer()
-    private val inputHandler = DesktopInputHandler()
-
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        val vncEvent = inputHandler.translateTouchEvent(event)
-        vncBridgeService.sendInputEvent(vncEvent)
-        return true
-    }
-
-    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
-        val vncEvent = inputHandler.translateKeyEvent(event)
-        vncBridgeService.sendInputEvent(vncEvent)
-        return true
-    }
-}
-```
-
-**Input Translation:**
-```kotlin
-class DesktopInputHandler {
-    // Touch → Mouse pointer
-    fun translateTouchEvent(event: MotionEvent): PointerEvent {
-        return PointerEvent(
-            x = event.x.toInt(),
-            y = event.y.toInt(),
-            mask = when (event.action) {
-                MotionEvent.ACTION_DOWN -> MouseEventMask.LEFT_BUTTON_DOWN
-                MotionEvent.ACTION_UP -> MouseEventMask.LEFT_BUTTON_UP
-                MotionEvent.ACTION_MOVE -> MouseEventMask.EMPTY
-                else -> MouseEventMask.EMPTY
-            }
-        )
-    }
-
-    // Pinch → Scroll wheel
-    fun translateGesture(detector: ScaleGestureDetector): ScrollEvent {
-        return ScrollEvent(
-            deltaX = detector.currentSpan - detector.previousSpan,
-            deltaY = 0
-        )
-    }
-
-    // Keyboard → X11 keysyms
-    fun translateKeyEvent(event: KeyEvent): KeyEvent {
-        val keysym = keyMap.getKeySym(event.keyCode)
-        return KeyEvent(
-            keysym = keysym,
-            isDown = event.action == KeyEvent.ACTION_DOWN
-        )
-    }
-}
-```
+Input translation is planned work to be implemented as part of the chosen desktop rendering pipeline.
 
 ---
 
@@ -371,49 +242,22 @@ class DesktopInputHandler {
 ├── cache/
 │   └── downloads/
 │       └── jammy-xfce4-arm64.tar.gz (may be partially downloaded)
-└── shared_prefs/
-    └── sessions.xml                  # Session metadata
+└── datastore/
+    └── sessions.preferences_pb        # Session metadata (DataStore Preferences)
 ```
 
 **Download Service:**
-```kotlin
-class RootfsDownloadService : Service() {
-    private lateinit var downloadManager: DownloadManager
 
-    fun startDownload(distro: DistroVariant, url: String) {
-        val request = DownloadManager.Request(Uri.parse(url)).apply {
-            setDestinationInExternalFilesDir(
-                this@RootfsDownloadService,
-                Environment.DIRECTORY_DOWNLOADS,
-                "${distro.id}.tar.gz"
-            )
-            setAllowedNetworkTypes(
-                DownloadManager.Request.NETWORK_WIFI or
-                DownloadManager.Request.NETWORK_MOBILE
-            )
-            setTitle("Downloading Ubuntu ${distro.id}")
-            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
-        }
+Implemented today:
 
-        downloadId = downloadManager.enqueue(request)
-    }
+- `RootfsDownloadService` downloads via OkHttp, runs as a foreground service, and updates a notification.
+- Checksum verification is TODO.
+- Extraction is currently a stub in `RootfsManager.extractRootfs(...)` (creates an `.installed` marker).
 
-    private fun onDownloadComplete(downloadId: Long) {
-        // Verify SHA256
-        val file = queryDownloadedFile(downloadId)
-        if (!verifyChecksum(file, distro.sha256)) {
-            notifyError("Checksum verification failed")
-            return
-        }
+Authoritative files:
 
-        // Extract rootfs
-        lifecycleScope.launch {
-            val progress = extractRootfs(file)
-            notificationManager.updateProgress(progress)
-        }
-    }
-}
-```
+- `app/src/main/java/com/udroid/app/service/RootfsDownloadService.kt`
+- `app/src/main/java/com/udroid/app/rootfs/RootfsManager.kt`
 
 **Size Optimization:**
 - Use APK splits for different architectures (arm64-v8a, armeabi-v7a, x86_64)
