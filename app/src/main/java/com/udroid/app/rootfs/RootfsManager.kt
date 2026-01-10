@@ -17,6 +17,8 @@ import java.io.File
 
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.nio.file.Files
+import java.nio.file.Paths
 import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -107,11 +109,23 @@ class RootfsManager @Inject constructor(
 
                                     // Handle symlinks
                                     if (entry.isSymbolicLink) {
-                                        // Create symlink file with target path stored
-                                        // Android doesn't support symlinks well, store as regular file
                                         val linkTarget = entry.linkName
-                                        Timber.d("Symlink: ${entry.name} -> $linkTarget")
-                                        // Skip symlinks for now, they cause issues
+                                        Timber.d("Creating symlink: ${entry.name} -> $linkTarget")
+                                        try {
+                                            outputFile.delete()
+                                            Files.createSymbolicLink(
+                                                outputFile.toPath(),
+                                                Paths.get(linkTarget)
+                                            )
+                                        } catch (e: Exception) {
+                                            Timber.w("Failed to create symlink ${entry.name}: ${e.message}")
+                                        }
+                                    } else if (entry.isLink) {
+                                        // Hard link - copy the target file
+                                        val linkTarget = File(targetDir, entry.linkName)
+                                        if (linkTarget.exists()) {
+                                            linkTarget.copyTo(outputFile, overwrite = true)
+                                        }
                                     } else {
                                         // Extract regular file
                                         FileOutputStream(outputFile).use { fos ->
@@ -241,8 +255,23 @@ class RootfsManager @Inject constructor(
                                     outputFile.parentFile?.mkdirs()
 
                                     if (entry.isSymbolicLink) {
-                                        Timber.d("Symlink: ${entry.name} -> ${entry.linkName}")
-                                        // Skip symlinks for Android compatibility
+                                        val linkTarget = entry.linkName
+                                        Timber.d("Creating symlink: ${entry.name} -> $linkTarget")
+                                        try {
+                                            outputFile.delete()
+                                            Files.createSymbolicLink(
+                                                outputFile.toPath(),
+                                                Paths.get(linkTarget)
+                                            )
+                                        } catch (e: Exception) {
+                                            Timber.w("Failed to create symlink ${entry.name}: ${e.message}")
+                                        }
+                                    } else if (entry.isLink) {
+                                        // Hard link - copy the target file
+                                        val linkTarget = File(targetDir, entry.linkName)
+                                        if (linkTarget.exists()) {
+                                            linkTarget.copyTo(outputFile, overwrite = true)
+                                        }
                                     } else {
                                         FileOutputStream(outputFile).use { fos ->
                                             val buffer = ByteArray(8192)

@@ -24,6 +24,11 @@ class NativeBridge @Inject constructor(
         File(context.applicationInfo.nativeLibraryDir)
     }
 
+    // Directory for versioned libraries (writable)
+    private val libDir: File by lazy {
+        File(context.filesDir, "lib").also { it.mkdirs() }
+    }
+
     private val prootBinary: File by lazy {
         File(nativeLibDir, "libproot.so")
     }
@@ -34,6 +39,11 @@ class NativeBridge @Inject constructor(
 
     private val tallocLib: File by lazy {
         File(nativeLibDir, "libtalloc.so")
+    }
+
+    // Versioned talloc library that proot expects
+    private val tallocLibVersioned: File by lazy {
+        File(libDir, "libtalloc.so.2")
     }
 
     private var prootProcess: Process? = null
@@ -71,6 +81,13 @@ class NativeBridge @Inject constructor(
             if (!prootBinary.canExecute()) {
                 Log.e(TAG, "proot binary is not executable!")
                 return@withContext false
+            }
+
+            // Copy talloc with versioned name (proot expects libtalloc.so.2)
+            if (!tallocLibVersioned.exists() || tallocLibVersioned.length() != tallocLib.length()) {
+                Log.d(TAG, "Copying talloc library with versioned name...")
+                tallocLib.copyTo(tallocLibVersioned, overwrite = true)
+                Log.d(TAG, "Talloc copied to: ${tallocLibVersioned.absolutePath}")
             }
 
             Log.d(TAG, "PRoot binaries ready in native lib directory")
@@ -135,7 +152,8 @@ class NativeBridge @Inject constructor(
                 // Set environment
                 environment().apply {
                     put("PROOT_LOADER", loaderBinary.absolutePath)
-                    put("LD_LIBRARY_PATH", nativeLibDir.absolutePath)
+                    // Include both native lib dir and our writable lib dir for versioned libs
+                    put("LD_LIBRARY_PATH", "${libDir.absolutePath}:${nativeLibDir.absolutePath}")
                     put("HOME", "/root")
                     put("USER", "root")
                     put("TERM", "xterm-256color")
