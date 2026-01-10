@@ -1,0 +1,36 @@
+# Ralph Progress Log
+Started: 2026-01-10
+
+## Codebase Patterns
+- Session lifecycle transitions must be persisted via `SessionRepository.updateSessionState(sessionId, ...)`.
+- Session persistence conversions live in `SessionRepository.kt` (`SessionStateData.toDomain()` and `SessionState.toData()`).
+- Avoid throwing across UI/service boundaries; prefer `Result`.
+
+## Key Files
+- app/src/main/java/com/udroid/app/MainActivity.kt
+- app/src/main/java/com/udroid/app/service/UbuntuSessionService.kt
+- app/src/main/java/com/udroid/app/service/RootfsDownloadService.kt
+- app/src/main/java/com/udroid/app/session/UbuntuSession.kt
+- app/src/main/java/com/udroid/app/session/UbuntuSessionManagerImpl.kt
+- app/src/main/java/com/udroid/app/storage/SessionRepository.kt
+- app/src/main/java/com/udroid/app/devbox/ (new devbox feature)
+- app/src/main/java/com/udroid/app/ui/services/ (new services UI)
+
+---
+
+## [2026-01-10] - US-001 through US-006
+- **What was implemented**: Fixed all compilation errors to achieve a successful `assembleDebug` build
+- **Files changed**:
+  - `app/src/main/java/com/udroid/app/devbox/DevServiceManager.kt` - Added missing imports (`Context`, `ApplicationContext`)
+  - `app/src/main/java/com/udroid/app/devbox/NetworkUtils.kt` - Fixed non-exhaustive `when` expression by switching from object equality to `template.id` string matching with `else` branch
+  - `app/src/main/java/com/udroid/app/ui/services/ServicesViewModel.kt` - Added missing StateFlow/SharedFlow declarations (`_sessionState`, `_services`, `_logs`, `_deviceIp`, `_isLoading`, `_toastMessage`, `_error`)
+  - `app/src/main/java/com/udroid/app/ui/services/ServicesScreen.kt` - Fixed Composable context issue by replacing `item { forEach { } }` pattern with proper `items(list)` LazyColumn usage
+  - `gradle.properties` - Updated JAVA_HOME to Linux JDK path
+  - `local.properties` - Updated SDK path to Linux Android SDK
+
+- **Learnings:**
+  - `ServiceTemplate` is a data class, not an enum. When comparing data class instances with `when`, use a property like `.id` and include an `else` branch for exhaustiveness.
+  - In Compose LazyColumn, `forEach` inside an `item { }` block doesn't properly handle @Composable functions. Use `items(list)` instead for proper composable scope.
+  - Hilt `@ApplicationContext` qualifier requires importing both `android.content.Context` and `dagger.hilt.android.qualifiers.ApplicationContext`.
+  - StateFlow/SharedFlow variables must be declared in ViewModel before they can be assigned values.
+---

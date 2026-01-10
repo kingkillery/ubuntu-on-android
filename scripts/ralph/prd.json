@@ -1,0 +1,95 @@
+{
+  "branchName": "ralph/devbox-a-c",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Fix ProcessResult visibility so session/native APIs compile",
+      "acceptanceCriteria": [
+        "ProcessResult is accessible where referenced",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "See BUILD_STATUS.md item 1"
+    },
+    {
+      "id": "US-002",
+      "title": "Resolve getSession override conflict in UbuntuSessionManagerImpl",
+      "acceptanceCriteria": [
+        "No override conflict errors",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "See BUILD_STATUS.md item 2"
+    },
+    {
+      "id": "US-003",
+      "title": "Fix SessionStateData vs SessionState mismatches in UbuntuSessionManagerImpl",
+      "acceptanceCriteria": [
+        "Correct toDomain/toData conversions used",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "See BUILD_STATUS.md item 3"
+    },
+    {
+      "id": "US-004",
+      "title": "Fix OkHttp API usage in RootfsDownloadService",
+      "acceptanceCriteria": [
+        "OkHttp 4.12 APIs used correctly",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "See BUILD_STATUS.md item 4"
+    },
+    {
+      "id": "US-005",
+      "title": "Replace missing icon references in foreground services",
+      "acceptanceCriteria": [
+        "No missing resource errors",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "See BUILD_STATUS.md item 5"
+    },
+    {
+      "id": "US-006",
+      "title": "Fix missing imports (Flow asStateFlow, Material Icons) and DataStore firstOrNull usage",
+      "acceptanceCriteria": [
+        "No missing import / API errors remain",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "See BUILD_STATUS.md items 6-8"
+    },
+    {
+      "id": "US-007",
+      "title": "Add initial Devbox sharing data model (routes + share state) without breaking session persistence",
+      "acceptanceCriteria": [
+        "A persisted model exists for devbox share state (even if stubbed)",
+        "No changes break existing session persistence",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Keep story small: model + repository only"
+    },
+    {
+      "id": "US-008",
+      "title": "Add UI affordance to show a shareable URL + QR code on DesktopScreen (stub URL)",
+      "acceptanceCriteria": [
+        "DesktopScreen shows a share section gated behind a button/toggle",
+        "A QR code can be generated for the stub URL",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Do not implement networking yet; just UX + QR"
+    }
+  ]
+}
