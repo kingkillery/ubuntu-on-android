@@ -1,0 +1,110 @@
+{
+  "branchName": "ralph/server-deploy",
+  "description": "Phase 2: Server deployment features - Ubuntu distros, NixOS, proxy/API hosting",
+  "userStories": [
+    {
+      "id": "SRV-001",
+      "title": "Make Ubuntu 22.04 rootfs download and extract work",
+      "acceptanceCriteria": [
+        "Ubuntu XFCE4/MATE/GNOME variants download from CDN",
+        "Rootfs extracts with proper symlinks preserved",
+        "PRoot can launch /bin/bash in Ubuntu rootfs",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Requires download service to work + larger rootfs handling"
+    },
+    {
+      "id": "SRV-002",
+      "title": "Add NixOS as a distribution option",
+      "acceptanceCriteria": [
+        "NixOS variant appears in distro selection",
+        "Nix package manager works in proot environment",
+        "Can install packages with nix-env",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "NixOS minirootfs or nix-portable approach"
+    },
+    {
+      "id": "SRV-003",
+      "title": "Implement SSH server in proot environment",
+      "acceptanceCriteria": [
+        "dropbear or openssh-server runs inside proot",
+        "User can SSH into the container from another device",
+        "Port forwarding configured correctly",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "SSH enables remote access to container"
+    },
+    {
+      "id": "SRV-004",
+      "title": "Add simple HTTP proxy server capability",
+      "acceptanceCriteria": [
+        "tinyproxy or similar can be installed and run",
+        "Proxy is accessible from local network",
+        "UI shows proxy status and port",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Core use case: mobile proxy server"
+    },
+    {
+      "id": "SRV-005",
+      "title": "Add API server hosting support",
+      "acceptanceCriteria": [
+        "Node.js/Python/Go can be installed in environment",
+        "Simple HTTP server can bind to port and serve requests",
+        "Port forwarding allows external access",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Enable hosting APIs from phone"
+    },
+    {
+      "id": "SRV-006",
+      "title": "Add persistent storage for server data",
+      "acceptanceCriteria": [
+        "Server configs survive app restart",
+        "/data mount point available in proot",
+        "User data persists across sessions",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Data persistence critical for servers"
+    },
+    {
+      "id": "SRV-007",
+      "title": "Add network status and port display in UI",
+      "acceptanceCriteria": [
+        "UI shows current IP address",
+        "UI shows open ports and services",
+        "Easy copy of connection URL",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "User needs to know how to connect"
+    },
+    {
+      "id": "SRV-008",
+      "title": "Add one-click service templates",
+      "acceptanceCriteria": [
+        "Template for: HTTP proxy, SSH server, Node.js API",
+        "One tap to deploy a service",
+        "Service auto-starts with session",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Make server deployment dead simple"
+    }
+  ]
+}

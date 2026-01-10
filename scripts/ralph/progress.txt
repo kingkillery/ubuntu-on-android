@@ -1,6 +1,34 @@
 # Ralph Progress Log
 Started: 2026-01-10
 
+## Phase 1 Status: COMPLETE
+All 8 user stories from prd.json completed and merged to main.
+
+## Phase 2: Server Deployment (prd-server.json)
+See prd-server.json for 8 new user stories targeting:
+- Ubuntu 22.04 distros working
+- NixOS as distribution option
+- SSH/proxy/API server hosting
+- One-click service templates
+
+---
+
+## [2026-01-10] - PRoot Fixes (Post US-008)
+- **What was implemented**: Fixed PRoot to actually work on Android device
+- **Files changed**:
+  - `app/src/main/AndroidManifest.xml` - Added `extractNativeLibs="true"` for Android 10+
+  - `app/build.gradle.kts` - Added `jniLibs.useLegacyPackaging = true`
+  - `app/src/main/java/com/udroid/app/nativebridge/NativeBridge.kt` - Copy libtalloc.so to versioned libtalloc.so.2, update LD_LIBRARY_PATH
+  - `app/src/main/java/com/udroid/app/rootfs/RootfsManager.kt` - Create symlinks during extraction (required for busybox)
+- **Test result**: PRoot test successful with Alpine Linux on device
+- **Learnings:**
+  - Android 10+ doesn't extract native libs by default - need `extractNativeLibs="true"`
+  - PRoot expects `libtalloc.so.2` (versioned) but Android bundles as `libtalloc.so`
+  - Alpine rootfs uses busybox symlinks (/bin/sh -> busybox) - must create during extraction
+  - `Files.createSymbolicLink()` works in Android app-private directories
+
+---
+
 ## Codebase Patterns
 - Session lifecycle transitions must be persisted via `SessionRepository.updateSessionState(sessionId, ...)`.
 - Session persistence conversions live in `SessionRepository.kt` (`SessionStateData.toDomain()` and `SessionState.toData()`).
