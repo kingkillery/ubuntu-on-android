@@ -2,6 +2,8 @@ package com.udroid.app.ui.session
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.udroid.app.model.DistroVariant
+import com.udroid.app.rootfs.RootfsManager
 import com.udroid.app.session.UbuntuSessionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,9 +15,15 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 
+data class DownloadRequest(
+    val sessionId: String,
+    val distro: DistroVariant
+)
+
 @HiltViewModel
 class SessionListViewModel @Inject constructor(
-    private val sessionManager: UbuntuSessionManager
+    private val sessionManager: UbuntuSessionManager,
+    private val rootfsManager: RootfsManager
 ) : ViewModel() {
 
     val sessions: StateFlow<List<com.udroid.app.session.UbuntuSession>> = sessionManager.listSessions()
@@ -26,6 +34,18 @@ class SessionListViewModel @Inject constructor(
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    // Event to trigger download in UI layer
+    private val _downloadRequest = MutableStateFlow<DownloadRequest?>(null)
+    val downloadRequest: StateFlow<DownloadRequest?> = _downloadRequest.asStateFlow()
+
+    fun clearDownloadRequest() {
+        _downloadRequest.value = null
+    }
+
+    fun isRootfsInstalled(distro: DistroVariant): Boolean {
+        return rootfsManager.isRootfsInstalled(distro)
+    }
 
     fun deleteSession(sessionId: String) {
         viewModelScope.launch {
@@ -55,9 +75,31 @@ class SessionListViewModel @Inject constructor(
             try {
                 _isLoading.value = true
                 Timber.d("Starting session: $sessionId")
-                
+
+                // Find the session to get its distro
+                val session = sessions.value.find { it.id == sessionId }
+                if (session == null) {
+                    _errorMessage.value = "Session not found"
+                    return@launch
+                }
+
+                val distro = session.config.distro
+
+                // Check if rootfs needs to be downloaded
+                if (!distro.bundled && !rootfsManager.isRootfsInstalled(distro)) {
+                    if (distro.downloadUrl != null) {
+                        Timber.d("Rootfs not installed, requesting download for ${distro.id}")
+                        _downloadRequest.value = DownloadRequest(sessionId, distro)
+                        _errorMessage.value = "Downloading ${distro.displayName}..."
+                        return@launch
+                    } else {
+                        _errorMessage.value = "No download URL available for ${distro.displayName}"
+                        return@launch
+                    }
+                }
+
                 val result = sessionManager.startSession(sessionId)
-                
+
                 result.fold(
                     onSuccess = {
                         Timber.d("Session started: $sessionId")

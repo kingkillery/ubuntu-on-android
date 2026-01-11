@@ -21,35 +21,40 @@ enum class DistroVariant(
     val desktop: DesktopEnvironment,
     val sizeBytes: Long,
     val bundled: Boolean = false,
-    val assetPath: String? = null
+    val assetPath: String? = null,
+    val downloadUrl: String? = null
 ) {
     JAMMY_XFCE4(
         id = "jammy:xfce4",
         displayName = "Ubuntu 22.04 LTS with XFCE4",
         version = UbuntuVersion.JAMMY,
         desktop = DesktopEnvironment.XFCE4,
-        sizeBytes = 2_500_000_000L
+        sizeBytes = 2_500_000_000L,
+        downloadUrl = "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-arm64-root.tar.xz"
     ),
     JAMMY_MATE(
         id = "jammy:mate",
         displayName = "Ubuntu 22.04 LTS with MATE",
         version = UbuntuVersion.JAMMY,
         desktop = DesktopEnvironment.MATE,
-        sizeBytes = 2_400_000_000L
+        sizeBytes = 2_400_000_000L,
+        downloadUrl = "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-arm64-root.tar.xz"
     ),
     JAMMY_GNOME(
         id = "jammy:gnome",
         displayName = "Ubuntu 22.04 LTS with GNOME",
         version = UbuntuVersion.JAMMY,
         desktop = DesktopEnvironment.GNOME,
-        sizeBytes = 3_000_000_000L
+        sizeBytes = 3_000_000_000L,
+        downloadUrl = "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-arm64-root.tar.xz"
     ),
     NOBLE_RAW(
         id = "noble:raw",
         displayName = "Ubuntu 24.04 LTS (CLI only)",
         version = UbuntuVersion.NOBLE,
         desktop = DesktopEnvironment.NONE,
-        sizeBytes = 500_000_000L
+        sizeBytes = 210_000_000L,
+        downloadUrl = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-arm64-root.tar.xz"
     ),
     ALPINE_MINI(
         id = "alpine:mini",

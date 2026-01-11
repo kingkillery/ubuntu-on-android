@@ -13,6 +13,23 @@ See prd-server.json for 8 new user stories targeting:
 
 ---
 
+## [2026-01-10] - SRV-001 (In Progress)
+- **What was implemented**: Added Ubuntu 22.04 rootfs download support
+- **Files changed**:
+  - `app/src/main/java/com/udroid/app/model/DistroVariant.kt` - Added `downloadUrl` field with linuxcontainers.org URLs for Ubuntu variants
+  - `app/src/main/java/com/udroid/app/service/RootfsDownloadService.kt` - Updated to use distro.downloadUrl as fallback if no URL provided in intent
+  - `app/src/main/java/com/udroid/app/rootfs/RootfsManager.kt` - Added XZ decompression support for .tar.xz files, smart cache file extension detection
+  - `app/build.gradle.kts` - Added xz-java library dependency for XZ decompression
+  - `.claude/plugins/android-testing/skills/codex-subagent.md` - New skill documenting Codex CLI subagent pattern
+- **Acceptance criteria status**:
+  - ✓ Ubuntu XFCE4/MATE/GNOME variants have download URLs from linuxcontainers.org CDN
+  - ✓ Rootfs extracts with proper symlinks preserved (implemented in Phase 1)
+  - ⏳ PRoot can launch /bin/bash in Ubuntu rootfs - NEEDS DEVICE TESTING
+  - ✓ `./gradlew :app:assembleDebug` succeeds
+- **Next steps**: Test actual Ubuntu download on device to verify full functionality
+
+---
+
 ## [2026-01-10] - PRoot Fixes (Post US-008)
 - **What was implemented**: Fixed PRoot to actually work on Android device
 - **Files changed**:

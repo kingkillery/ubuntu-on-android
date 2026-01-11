@@ -1,5 +1,6 @@
 package com.udroid.app.ui.session
 
+import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,9 +15,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.udroid.app.service.RootfsDownloadService
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -26,9 +29,24 @@ fun SessionListScreen(
     onServicesClick: (sessionId: String) -> Unit,
     viewModel: SessionListViewModel = hiltViewModel()
 ) {
+    val context = LocalContext.current
     val sessions by viewModel.sessions.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    val downloadRequest by viewModel.downloadRequest.collectAsState()
+
+    // Handle download request
+    LaunchedEffect(downloadRequest) {
+        downloadRequest?.let { request ->
+            val intent = Intent(context, RootfsDownloadService::class.java).apply {
+                action = RootfsDownloadService.ACTION_DOWNLOAD
+                putExtra(RootfsDownloadService.EXTRA_DISTRO_ID, request.distro.id)
+                // downloadUrl is optional - service will use distro.downloadUrl as fallback
+            }
+            context.startForegroundService(intent)
+            viewModel.clearDownloadRequest()
+        }
+    }
 
     Scaffold(
         topBar = {
