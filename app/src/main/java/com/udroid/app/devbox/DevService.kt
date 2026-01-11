@@ -53,18 +53,18 @@ data class ServiceTemplate(
             description = "High performance web server",
             defaultPort = 8080,
             startCommand = "nginx -g 'daemon off;' -c /etc/nginx/nginx.conf",
-            healthCheck = "nc -z 127.0.0.1 80",
+            healthCheck = "nc -z 127.0.0.1 8080",
             checkCommand = "which nginx",
             installCommand = "apt-get update && apt-get install -y nginx"
         )
         
         val NODEJS = ServiceTemplate(
             id = "nodejs",
-            displayName = "Node.js Environment",
-            description = "JavaScript runtime",
+            displayName = "Node.js HTTP Server",
+            description = "JavaScript runtime with HTTP server",
             defaultPort = 3000,
-            startCommand = "node app.js", // Placeholder
-            healthCheck = "node -v",
+            startCommand = "npx --yes http-server -p 3000 -a 0.0.0.0",
+            healthCheck = "nc -z 127.0.0.1 3000",
             checkCommand = "which node",
             installCommand = "apt-get update && apt-get install -y nodejs npm"
         )

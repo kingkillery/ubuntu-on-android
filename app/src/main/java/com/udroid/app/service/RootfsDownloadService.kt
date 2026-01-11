@@ -45,7 +45,7 @@ class RootfsDownloadService : Service() {
     companion object {
         private const val NOTIFICATION_CHANNEL_ID = "rootfs_download_channel"
         private const val NOTIFICATION_ID = 1002
-        const val ACTION_DOWNLOAD = "com.udroid.app.DOWNALL_ROOTFS"
+        const val ACTION_DOWNLOAD = "com.udroid.app.DOWNLOAD_ROOTFS"
         const val EXTRA_DISTRO_ID = "distro_id"
         const val EXTRA_DOWNLOAD_URL = "download_url"
     }
@@ -78,16 +78,22 @@ class RootfsDownloadService : Service() {
             ACTION_DOWNLOAD -> {
                 val distroId = intent.getStringExtra(EXTRA_DISTRO_ID)
                 val downloadUrl = intent.getStringExtra(EXTRA_DOWNLOAD_URL)
-                
-                if (distroId != null && downloadUrl != null) {
+
+                if (distroId != null) {
                     val distro = DistroVariant.fromId(distroId)
                     if (distro != null) {
-                        startDownload(distro, downloadUrl)
+                        // Use provided URL or fall back to distro's built-in URL
+                        val url = downloadUrl ?: distro.downloadUrl
+                        if (url != null) {
+                            startDownload(distro, url)
+                        } else {
+                            Timber.e("No download URL available for ${distro.id}")
+                        }
                     }
                 }
             }
         }
-        
+
         return START_STICKY
     }
 
@@ -108,15 +114,15 @@ class RootfsDownloadService : Service() {
                     updateNotification(distro, progress)
                 }
                 
-                // Verify
+                // Verify checksum by fetching SHA256SUMS from Ubuntu servers
                 _downloadState.value = DownloadState.Verifying(distro)
                 updateNotification(distro, 100, "Verifying...")
-                
-                // TODO: Verify checksum when available
-                // val verified = rootfsManager.verifyChecksum(cacheFile, distro.sha256)
-                // if (!verified) {
-                //     throw SecurityException("Checksum verification failed")
-                // }
+
+                val verified = rootfsManager.verifyChecksumFromServer(cacheFile, url)
+                if (!verified) {
+                    cacheFile.delete()
+                    throw SecurityException("Checksum verification failed - file may be corrupted")
+                }
                 
                 // Extract
                 _downloadState.value = DownloadState.Extracting(0)

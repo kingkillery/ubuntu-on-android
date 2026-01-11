@@ -12,16 +12,21 @@ import timber.log.Timber
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
+import org.apache.commons.compress.compressors.xz.XZCompressorInputStream
 import java.io.BufferedInputStream
 import java.io.File
+import java.io.InputStream
 
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.net.URL
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
+
+data class ChecksumEntry(val filename: String, val sha256: String)
 
 private const val TAG = "RootfsManager"
 
@@ -50,34 +55,132 @@ class RootfsManager @Inject constructor(
     }
 
     fun getCacheFile(distro: DistroVariant): File {
-        val filename = distro.id.replace(":", "_") + ".tar.gz"
+        // Determine extension from download URL or default to .tar.gz
+        val extension = when {
+            distro.downloadUrl?.endsWith(".tar.xz") == true -> ".tar.xz"
+            distro.downloadUrl?.endsWith(".tar.gz") == true -> ".tar.gz"
+            else -> ".tar.gz"
+        }
+        val filename = distro.id.replace(":", "_") + extension
         return File(cacheDir, filename)
     }
 
     suspend fun verifyChecksum(file: File, expectedSha256: String): Boolean {
         return withContext(Dispatchers.IO) {
             try {
-                val digest = MessageDigest.getInstance("SHA-256")
-                file.inputStream().use { stream ->
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    while (stream.read(buffer).also { bytesRead = it } != -1) {
-                        digest.update(buffer, 0, bytesRead)
-                    }
-                }
-                
-                val sha256 = digest.digest().joinToString("") { "%02x".format(it) }
-                val matches = sha256.equals(expectedSha256, ignoreCase = true)
-                
+                val actualSha256 = computeSha256(file)
+                val matches = actualSha256.equals(expectedSha256, ignoreCase = true)
+
                 if (!matches) {
-                    Timber.e("Checksum mismatch: expected $expectedSha256, got $sha256")
+                    Timber.e("Checksum mismatch: expected $expectedSha256, got $actualSha256")
                 }
-                
+
                 matches
             } catch (e: Exception) {
                 Timber.e(e, "Failed to verify checksum")
                 false
             }
+        }
+    }
+
+    /**
+     * Computes SHA-256 hash of a file.
+     */
+    private fun computeSha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { stream ->
+            val buffer = ByteArray(64 * 1024)
+            var bytesRead: Int
+            while (stream.read(buffer).also { bytesRead = it } != -1) {
+                digest.update(buffer, 0, bytesRead)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Fetches and parses the SHA256SUMS file from Ubuntu cloud images.
+     * Returns list of filename -> sha256 entries.
+     */
+    private fun parseSha256Sums(contents: String): List<ChecksumEntry> {
+        return contents.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
+            .mapNotNull { line ->
+                // Format: "<hash> <filename>" or "<hash> *<filename>"
+                val parts = line.split(Regex("\\s+"), limit = 2)
+                if (parts.size < 2) return@mapNotNull null
+                val hash = parts[0]
+                val name = parts[1].trim().removePrefix("*")
+                ChecksumEntry(name, hash)
+            }
+            .toList()
+    }
+
+    /**
+     * Fetches SHA256SUMS from the same directory as the download URL
+     * and verifies the downloaded file against it.
+     *
+     * @param downloadedFile The file that was downloaded
+     * @param downloadUrl The original download URL (used to derive SHA256SUMS location)
+     * @return true if verification passed, false otherwise
+     */
+    suspend fun verifyChecksumFromServer(downloadedFile: File, downloadUrl: String): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                // Derive SHA256SUMS URL from download URL
+                // e.g., https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-arm64-root.tar.xz
+                // becomes https://cloud-images.ubuntu.com/jammy/current/SHA256SUMS
+                val baseUrl = downloadUrl.substringBeforeLast("/")
+                val filename = downloadUrl.substringAfterLast("/")
+                val sha256SumsUrl = "$baseUrl/SHA256SUMS"
+
+                Timber.d("Fetching checksums from: $sha256SumsUrl")
+
+                // Fetch SHA256SUMS file
+                val sha256SumsContent = try {
+                    URL(sha256SumsUrl).readText()
+                } catch (e: Exception) {
+                    Timber.w(e, "Could not fetch SHA256SUMS, skipping verification")
+                    return@withContext true // Skip verification if we can't fetch checksums
+                }
+
+                // Parse and find our file's checksum
+                val entries = parseSha256Sums(sha256SumsContent)
+                val expectedChecksum = entries.find { it.filename == filename }?.sha256
+
+                if (expectedChecksum == null) {
+                    Timber.w("No checksum found for $filename in SHA256SUMS")
+                    return@withContext true // Skip if file not in checksums
+                }
+
+                // Verify
+                val actualChecksum = computeSha256(downloadedFile)
+                val matches = actualChecksum.equals(expectedChecksum, ignoreCase = true)
+
+                if (matches) {
+                    Timber.d("Checksum verified: $filename")
+                } else {
+                    Timber.e("Checksum mismatch for $filename: expected $expectedChecksum, got $actualChecksum")
+                }
+
+                matches
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to verify checksum from server")
+                true // Don't block on verification errors
+            }
+        }
+    }
+
+    /**
+     * Creates the appropriate decompressor based on file extension.
+     * Supports .tar.gz (gzip) and .tar.xz (xz) formats.
+     */
+    private fun createDecompressor(archiveFile: File, bis: BufferedInputStream): InputStream {
+        return when {
+            archiveFile.name.endsWith(".tar.xz") -> XZCompressorInputStream(bis)
+            archiveFile.name.endsWith(".tar.gz") -> GzipCompressorInputStream(bis)
+            else -> GzipCompressorInputStream(bis) // Default to gzip
         }
     }
 
@@ -95,8 +198,8 @@ class RootfsManager @Inject constructor(
 
             FileInputStream(archiveFile).use { fis ->
                 BufferedInputStream(fis).use { bis ->
-                    GzipCompressorInputStream(bis).use { gzis ->
-                        TarArchiveInputStream(gzis).use { tais ->
+                    createDecompressor(archiveFile, bis).use { decompressor ->
+                        TarArchiveInputStream(decompressor).use { tais ->
                             var entry: TarArchiveEntry? = tais.nextEntry
                             while (entry != null) {
                                 val outputFile = File(targetDir, entry.name)

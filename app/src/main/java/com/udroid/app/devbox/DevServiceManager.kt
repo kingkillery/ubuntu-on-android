@@ -228,21 +228,28 @@ class DevServiceManager @Inject constructor(
                 }
             }
 
-            // Wait a moment for service to start
-            delay(1000)
+            // Retry health check with exponential backoff: 500ms, 1s, 2s, 4s, 8s (max 5 attempts)
+            val backoffDelaysMs = listOf(500L, 1000L, 2000L, 4000L, 8000L)
+            var isHealthy = false
 
-            // Check health
-            val healthResult = session.exec(template.healthCheck)
-            val isHealthy = healthResult.isSuccess && healthResult.getOrNull()?.exitCode == 0
+            for (delayMs in backoffDelaysMs) {
+                delay(delayMs)
+                val healthResult = session.exec(template.healthCheck)
+                isHealthy = healthResult.isSuccess && healthResult.getOrNull()?.exitCode == 0
+                if (isHealthy) {
+                    break
+                }
+                emitLog(serviceId, LogLevel.INFO, "Health check pending, retrying in ${delayMs * 2}ms...")
+            }
 
             if (isHealthy) {
                 updateServiceState(serviceId, ServiceState.Running())
                 emitLog(serviceId, LogLevel.INFO, "${template.displayName} is running on port $port")
                 Result.success(getService(serviceId)!!)
             } else {
-                updateServiceState(serviceId, ServiceState.Running()) // Optimistic
-                emitLog(serviceId, LogLevel.WARN, "Service started but health check pending")
-                Result.success(getService(serviceId)!!)
+                updateServiceState(serviceId, ServiceState.Error("Health check failed after retries"))
+                emitLog(serviceId, LogLevel.ERROR, "Service failed health check after retries")
+                Result.failure(IllegalStateException("Service health check failed"))
             }
         } catch (e: Exception) {
             Timber.e(e, "Error starting service")
@@ -314,16 +321,13 @@ class DevServiceManager @Inject constructor(
 
     private fun buildStartCommand(template: ServiceTemplate, port: Int, bindMode: BindMode): String {
         val bindAddr = bindMode.bindAddress
-        // Simple string replacement if possible, otherwise callback to legacy hardcoded logic for now
-        // But we changed ServiceTemplate to Data Class.
-        
         return when (template.id) {
             "ssh" -> "dropbear -F -E -p $bindAddr:$port"
             "jupyter" -> "jupyter lab --ip=$bindAddr --port=$port --no-browser --allow-root --NotebookApp.token=''"
             "http" -> "python3 -m http.server $port --bind $bindAddr"
-            "nginx" -> "nginx -g 'daemon off;' -c /etc/nginx/nginx.conf" // Port needs config file edit usually, ignoing port param for now for nginx unless we sed it.
-            "nodejs" -> "node app.js" // Placeholder
-            else -> template.startCommand // Use the raw command if no override logic
+            "nginx" -> "sed -i 's/listen\\s\\+[0-9]\\+/listen $port/' /etc/nginx/sites-enabled/default && nginx -g 'daemon off;' -c /etc/nginx/nginx.conf"
+            "nodejs" -> "npx --yes http-server -p $port -a $bindAddr"
+            else -> template.startCommand
         }
     }
 
