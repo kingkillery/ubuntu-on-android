@@ -32,3 +32,6 @@ local.properties
 *.swp
 *.swo
 *~
+
+# Screenshots
+screen*.png
