@@ -122,6 +122,7 @@ dependencies {
 
     // Archive extraction
     implementation("org.apache.commons:commons-compress:1.26.0")
+    implementation("org.tukaani:xz:1.9") // Required for .tar.xz support
 
     // QR code generation
     implementation("com.google.zxing:core:3.5.2")
