@@ -77,7 +77,7 @@
         "./gradlew :app:assembleDebug succeeds"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "nohup services currently leave orphans on session stop"
     },
     {
