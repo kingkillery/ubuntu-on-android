@@ -16,6 +16,32 @@ See prd.json for 6 MP-* stories enabling concurrent process execution.
 
 ---
 
+## [2026-01-19] - MP-003
+- **What was implemented**: Fixed stream reader race condition in launchProot
+- **Files changed**:
+  - `app/src/main/java/com/udroid/app/nativebridge/NativeBridge.kt`:
+    - Added `CountDownLatch` import for proper thread synchronization
+    - Replaced `join(500)` with `CountDownLatch(2)` - each reader thread calls `countDown()` in finally block
+    - Added `use { }` blocks to ensure streams are properly closed
+    - Added `synchronized(stdoutBuilder)` / `synchronized(stderrBuilder)` when appending lines
+    - Used `readersLatch.await(5, TimeUnit.SECONDS)` to wait for readers with reasonable timeout
+    - Added interrupt fallback if readers don't complete within 5 seconds
+    - Synchronized final read of StringBuilder contents to ensure visibility
+- **Acceptance criteria verification**:
+  - ✓ stdout/stderr reader threads complete before returning result (via CountDownLatch.await())
+  - ✓ Fast commands (<100ms) capture full output (readers wait until EOF, not arbitrary 500ms)
+  - ✓ Use proper thread synchronization instead of join(500) (CountDownLatch + synchronized blocks)
+  - ✓ `./gradlew :app:assembleDebug` succeeds
+- **Learnings:**
+  - `join(500)` is a race condition - it gives up after 500ms regardless of whether the reader is done
+  - `CountDownLatch` is the right primitive when you need to wait for N threads to complete a phase
+  - Reader threads naturally finish when the stream reaches EOF (process exit), so waiting on latch works well
+  - For timeout/kill scenario, `destroyForcibly()` closes streams causing readers to get IOException and exit
+  - Using `use { }` blocks ensures BufferedReader is closed even on exception (resource management)
+  - `synchronized` on StringBuilder is needed because multiple threads access it (append vs toString)
+
+---
+
 ## [2026-01-19] - MP-002
 - **What was implemented**: Added actual OS PID retrieval from proot processes
 - **Files changed**:

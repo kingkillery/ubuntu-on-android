@@ -5,6 +5,7 @@ import android.os.Build
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import android.util.Log
 import timber.log.Timber
@@ -191,23 +192,38 @@ class NativeBridge @Inject constructor(
             val stdoutBuilder = StringBuilder()
             val stderrBuilder = StringBuilder()
 
-            // Start readers in background
+            // Use CountDownLatch to properly wait for reader threads to complete
+            val readersLatch = CountDownLatch(2)
+
+            // Start readers in background - they signal completion via latch
             val stdoutReader = Thread {
                 try {
-                    process.inputStream.bufferedReader().forEachLine { line ->
-                        stdoutBuilder.appendLine(line)
+                    process.inputStream.bufferedReader().use { reader ->
+                        reader.forEachLine { line ->
+                            synchronized(stdoutBuilder) {
+                                stdoutBuilder.appendLine(line)
+                            }
+                        }
                     }
                 } catch (e: Exception) {
                     Timber.w("Stdout read interrupted: ${e.message}")
+                } finally {
+                    readersLatch.countDown()
                 }
             }
             val stderrReader = Thread {
                 try {
-                    process.errorStream.bufferedReader().forEachLine { line ->
-                        stderrBuilder.appendLine(line)
+                    process.errorStream.bufferedReader().use { reader ->
+                        reader.forEachLine { line ->
+                            synchronized(stderrBuilder) {
+                                stderrBuilder.appendLine(line)
+                            }
+                        }
                     }
                 } catch (e: Exception) {
                     Timber.w("Stderr read interrupted: ${e.message}")
+                } finally {
+                    readersLatch.countDown()
                 }
             }
 
@@ -229,17 +245,25 @@ class NativeBridge @Inject constructor(
                 -1
             }
 
-            // Give readers a moment to finish
-            stdoutReader.join(500)
-            stderrReader.join(500)
+            // Wait for reader threads to complete.
+            // On normal completion: process has exited, streams will EOF, readers finish quickly.
+            // On timeout: destroyForcibly closes streams, readers get IOException and finish.
+            // Use a reasonable timeout (5s) to avoid hanging forever if something goes wrong.
+            val readersFinished = readersLatch.await(5, TimeUnit.SECONDS)
+            if (!readersFinished) {
+                Log.w(TAG, "Reader threads did not complete within 5s, interrupting...")
+                stdoutReader.interrupt()
+                stderrReader.interrupt()
+            }
 
             // Remove process from map after completion
             synchronized(processMap) {
                 processMap.remove(sessionId)
             }
 
-            val stdout = stdoutBuilder.toString()
-            val stderr = stderrBuilder.toString()
+            // Read final output (synchronized to ensure we see all appended data)
+            val stdout = synchronized(stdoutBuilder) { stdoutBuilder.toString() }
+            val stderr = synchronized(stderrBuilder) { stderrBuilder.toString() }
 
             Log.d(TAG, "PRoot exited with code: $exitCode for session $sessionId, stdout: ${stdout.take(200)}, stderr: ${stderr.take(200)}")
             Timber.d("PRoot exited with code: $exitCode for session $sessionId, stdout: ${stdout.take(100)}")
