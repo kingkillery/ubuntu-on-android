@@ -15,6 +15,15 @@ import javax.inject.Singleton
 
 private const val TAG = "NativeBridge"
 
+/**
+ * Handle to a running proot process, exposing the actual OS PID.
+ */
+data class ProotProcessHandle(
+    val sessionId: String,
+    val pid: Long,
+    val isAlive: Boolean
+)
+
 @Singleton
 class NativeBridge @Inject constructor(
     @ApplicationContext private val context: Context
@@ -290,6 +299,58 @@ class NativeBridge @Inject constructor(
     suspend fun isProotRunning(sessionId: String): Boolean = withContext(Dispatchers.IO) {
         val process = synchronized(processMap) { processMap[sessionId] }
         process?.isAlive ?: false
+    }
+
+    /**
+     * Returns a ProcessHandle containing the actual OS PID for the given session.
+     * Returns null if no process is running for that session.
+     */
+    suspend fun getProcessHandle(sessionId: String): ProotProcessHandle? = withContext(Dispatchers.IO) {
+        val process = synchronized(processMap) { processMap[sessionId] } ?: return@withContext null
+        val pid = getProcessPid(process)
+        ProotProcessHandle(
+            sessionId = sessionId,
+            pid = pid,
+            isAlive = process.isAlive
+        )
+    }
+
+    /**
+     * Returns the actual OS PID for the given session.
+     * Returns -1 if no process is running for that session.
+     */
+    suspend fun getPid(sessionId: String): Long = withContext(Dispatchers.IO) {
+        val process = synchronized(processMap) { processMap[sessionId] } ?: return@withContext -1L
+        getProcessPid(process)
+    }
+
+    /**
+     * Extract the OS PID from a Process instance.
+     * Uses reflection to get the pid field since Android's ProcessImpl
+     * doesn't expose ProcessHandle from Java 9+.
+     */
+    private fun getProcessPid(process: Process): Long {
+        return try {
+            // Android uses java.lang.UNIXProcess (or ProcessImpl) which has a "pid" field
+            // This works across all Android API levels
+            val processClass = process.javaClass
+
+            // Try direct "pid" field first (common in Android's UNIXProcess)
+            val pidField = try {
+                processClass.getDeclaredField("pid")
+            } catch (e: NoSuchFieldException) {
+                // Fallback: try superclass if field not found
+                processClass.superclass?.getDeclaredField("pid")
+            }
+
+            pidField?.let {
+                it.isAccessible = true
+                it.getInt(process).toLong()
+            } ?: -1L
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to get process PID via reflection, falling back to -1")
+            -1L
+        }
     }
 
     suspend fun getProotStdout(sessionId: String): String = withContext(Dispatchers.IO) {

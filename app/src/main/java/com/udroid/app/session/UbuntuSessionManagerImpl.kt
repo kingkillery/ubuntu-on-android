@@ -135,11 +135,21 @@ class UbuntuSessionImpl(
 ) : UbuntuSession {
 
     private var _state: SessionState = SessionState.Created
-    private var processPid: Long? = null
     private var vncPort: Int = 5901
     private var rootfsPath: java.io.File? = null
 
     override val state: SessionState get() = _state
+
+    /**
+     * Returns the actual OS PID of the running proot process.
+     * Returns -1 if the session is not running or the PID cannot be determined.
+     */
+    override suspend fun getPid(): Long {
+        if (_state !is SessionState.Running) {
+            return -1L
+        }
+        return nativeBridge.getPid(id)
+    }
 
     override val stateFlow: Flow<SessionState> =
         sessionRepository.observeSessions()
@@ -218,7 +228,6 @@ class UbuntuSessionImpl(
             Log.d(TAG, "PRoot test successful: ${testResult.stdout.trim()}")
             Timber.d("PRoot test successful: ${testResult.stdout.trim()}")
 
-            processPid = System.currentTimeMillis()
             vncPort = 5901
 
             _state = SessionState.Running(vncPort)

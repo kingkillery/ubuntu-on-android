@@ -16,6 +16,32 @@ See prd.json for 6 MP-* stories enabling concurrent process execution.
 
 ---
 
+## [2026-01-19] - MP-002
+- **What was implemented**: Added actual OS PID retrieval from proot processes
+- **Files changed**:
+  - `app/src/main/java/com/udroid/app/nativebridge/NativeBridge.kt`:
+    - Added `ProotProcessHandle` data class containing sessionId, pid, and isAlive status
+    - Added `getProcessHandle(sessionId)` method returning `ProotProcessHandle?` for a session
+    - Added `getPid(sessionId)` method returning the actual OS PID (Long) for a session
+    - Added private `getProcessPid(process)` helper using reflection to extract PID from Android's UNIXProcess
+  - `app/src/main/java/com/udroid/app/session/UbuntuSession.kt`:
+    - Added `suspend fun getPid(): Long` method to `UbuntuSession` interface
+  - `app/src/main/java/com/udroid/app/session/UbuntuSessionManagerImpl.kt`:
+    - Implemented `getPid()` in `UbuntuSessionImpl` - delegates to `nativeBridge.getPid(id)`
+    - Removed obsolete `processPid = System.currentTimeMillis()` timestamp assignment
+- **Acceptance criteria verification**:
+  - ✓ launchProot returns ProcessHandle (via `getProcessHandle()`) or wrapper with real PID
+  - ✓ UbuntuSessionImpl stores actual PID instead of timestamp (removed timestamp, now uses live query)
+  - ✓ getPid(sessionId) method returns real process ID (`NativeBridge.getPid()` + `UbuntuSession.getPid()`)
+  - ✓ `./gradlew :app:assembleDebug` succeeds
+- **Learnings:**
+  - Android's JDK doesn't include `ProcessHandle` from Java 9+ - `process.toHandle()` doesn't exist
+  - Must use reflection to access the private `pid` field on Android's `java.lang.UNIXProcess`
+  - The field name is simply `pid` (int) on Android's UNIXProcess - accessible via `getDeclaredField("pid")`
+  - Live PID query (calling `nativeBridge.getPid()` when needed) is preferred over storing a stale value
+
+---
+
 ## [2026-01-19] - MP-001
 - **What was implemented**: Refactored NativeBridge to track multiple processes via Map<String, Process>
 - **Files changed**:

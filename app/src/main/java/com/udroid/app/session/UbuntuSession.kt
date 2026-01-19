@@ -29,6 +29,12 @@ interface UbuntuSession {
     val state: SessionState
     val stateFlow: Flow<SessionState>
 
+    /**
+     * Returns the actual OS PID of the running proot process.
+     * Returns -1 if the session is not running or the PID cannot be determined.
+     */
+    suspend fun getPid(): Long
+
     suspend fun start(): Result<Unit>
     suspend fun stop(): Result<Unit>
     suspend fun exec(command: String, timeoutSeconds: Long = 60): Result<ProcessResult>
