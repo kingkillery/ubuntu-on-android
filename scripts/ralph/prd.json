@@ -51,7 +51,7 @@
         "./gradlew :app:assembleDebug succeeds"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "Claude Code tasks often exceed 60s current max"
     },
     {
