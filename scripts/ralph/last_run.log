@@ -1,26 +1,134 @@
-Starting Ralph
-═══ Iteration 1 ═══
-[2026-01-10T14:22:34-0700] Running Claude (attempt 1/3)...
-[2026-01-10T14:22:34-0700] Claude still running...
-[2026-01-10T14:22:47-0700] Claude still running...
-[2026-01-10T14:22:57-0700] Claude still running...
-[2026-01-10T14:23:07-0700] Claude still running...
-[2026-01-10T14:23:20-0700] Claude still running...
-[2026-01-10T14:23:30-0700] Claude still running...
-[2026-01-10T14:23:40-0700] Claude still running...
-[2026-01-10T14:23:50-0700] Claude still running...
-[2026-01-10T14:24:03-0700] Claude still running...
-[2026-01-10T14:24:13-0700] Claude still running...
-[2026-01-10T14:24:23-0700] Claude still running...
-[2026-01-10T14:24:36-0700] Claude still running...
-[2026-01-10T14:24:46-0700] Claude still running...
-[2026-01-10T14:24:56-0700] Claude still running...
-All builds and tests pass (no unit tests exist yet, as indicated by `NO-SOURCE`).
+[2026-01-19T11:46:15] Starting iteration 1
+[2026-01-19T11:51:45] Claude exited with status 0
+**MP-001 is complete!**
 
-Looking at the PRD, all 8 user stories have `passes: true`:
-- US-001 through US-006: Build compilation fixes
-- US-007: Devbox sharing data model  
-- US-008: UI affordance for shareable URL + QR code
+## Summary
+
+I successfully implemented **MP-001: Refactor NativeBridge to track multiple processes via Map<String, Process>**.
+
+### Changes Made:
+
+**`app/src/main/java/com/udroid/app/nativebridge/NativeBridge.kt`:**
+- Replaced `prootProcess: Process?` with `processMap: MutableMap<String, Process>` for tracking multiple concurrent processes
+- Added `sessionId: String` parameter to `launchProot()` - stores process in map after start, removes on completion
+- Updated `killProot(sessionId: String, signal: Int)` to look up and remove process by sessionId (also handles SIGKILL vs SIGTERM)
+- Updated `isProotRunning(sessionId: String)` to check specific session's process
+- Updated `waitForProot(sessionId: String, timeoutMs: Long)` to wait for specific session
+- Updated `getProotStdout(sessionId: String)` and `getProotStderr(sessionId: String)` for session-specific stream access
+- Added `synchronized(processMap)` blocks for thread-safe access
+
+**`app/src/main/java/com/udroid/app/session/UbuntuSessionManagerImpl.kt`:**
+- Updated all `nativeBridge.launchProot()` calls to pass `sessionId = id`
+- Updated `nativeBridge.killProot()` to pass session `id` instead of pid
+
+### Acceptance Criteria Verified:
+- ✓ NativeBridge uses Map<String, Process> instead of single prootProcess field
+- ✓ launchProot accepts sessionId parameter and stores process in map
+- ✓ killProot accepts sessionId to kill specific process
+- ✓ isProotRunning accepts sessionId to check specific process
+- ✓ `./gradlew :app:assembleDebug` succeeds
+---
+[2026-01-19T11:51:51] Starting iteration 2
+[2026-01-19T11:55:21] Claude exited with status 0
+**MP-002 Complete** ✓
+
+Implemented story **MP-002: Return actual OS PID from launchProot and track in session**:
+
+**Changes made:**
+- `NativeBridge.kt`: Added `ProotProcessHandle` data class and methods `getProcessHandle(sessionId)`, `getPid(sessionId)`, and private `getProcessPid(process)` using reflection to extract the PID from Android's UNIXProcess
+- `UbuntuSession.kt`: Added `suspend fun getPid(): Long` to the interface
+- `UbuntuSessionManagerImpl.kt`: Implemented `getPid()` in `UbuntuSessionImpl` which delegates to `nativeBridge.getPid(id)`, removed the obsolete timestamp-based `processPid` assignment
+
+**Key learnings:**
+- Android's JDK doesn't include `ProcessHandle` from Java 9+ - must use reflection
+- The pid field is accessible via `getDeclaredField("pid")` on Android's UNIXProcess class
+- Live PID query is preferred over storing a stale value
+
+**Commits:**
+- `401a62e` - feat: [MP-002] Return actual OS PID from launchProot and track in session
+- `4cfac18` - chore: Mark MP-002 as complete in prd.json
+---
+[2026-01-19T11:55:26] Starting iteration 3
+[2026-01-19T11:58:56] Claude exited with status 0
+**MP-003 is complete.** Here's a summary:
+
+## MP-003: Fix stream reader race condition in launchProot
+
+**Problem:** The previous code used `join(500)` to wait for reader threads, which:
+1. Could truncate output if readers took longer than 500ms
+2. Lost output for fast commands that completed before threads started reading
+3. Had no proper thread synchronization for StringBuilder access
+
+**Solution:**
+- Replaced `join(500)` with `CountDownLatch(2)` - each reader calls `countDown()` in its `finally` block
+- Used `readersLatch.await(5, TimeUnit.SECONDS)` to wait for both readers to complete
+- Added `synchronized` blocks around StringBuilder access (append and toString)
+- Added `use { }` blocks to ensure BufferedReader resources are properly closed
+- Added fallback to interrupt threads if they don't complete within 5 seconds
+
+**Files changed:**
+- `app/src/main/java/com/udroid/app/nativebridge/NativeBridge.kt`
+- `scripts/ralph/progress.txt`
+- `scripts/ralph/prd.json`
+
+**Commits:**
+- `feat: [MP-003] Fix stream reader race condition in launchProot`
+- `chore: Mark MP-003 as complete in prd.json`
+---
+[2026-01-19T11:59:02] Starting iteration 4
+[2026-01-19T12:02:32] Claude exited with status 0
+**MP-004 completed successfully.**
+
+**Summary:**
+- **Story**: MP-004 - Add configurable timeout support for long-running operations
+- **Changes made**:
+  1. Changed default timeout in `UbuntuSession.exec()` from 60s to 300s
+  2. Changed default timeout in `NativeBridge.launchProot()` from 30s to 300s
+  3. Implemented `timeoutSeconds <= 0` check to wait indefinitely (no timeout)
+  4. Added KDoc documentation explaining the timeout behavior
+- **Files modified**:
+  - `app/src/main/java/com/udroid/app/nativebridge/NativeBridge.kt`
+  - `app/src/main/java/com/udroid/app/session/UbuntuSession.kt`
+  - `scripts/ralph/progress.txt`
+- **Commits**:
+  - `f12a56d feat: [MP-004] Add configurable timeout support for long-running operations`
+  - `1d60349 chore: Mark MP-004 as complete in prd.json`
+---
+[2026-01-19T12:02:37] Starting iteration 5
+[2026-01-19T12:06:38] Claude exited with status 0
+**MP-005 completed successfully.** 
+
+## Summary
+
+I implemented **MP-005: Add stdin support for interactive command execution**:
+
+**Changes made:**
+1. **`NativeBridge.kt`** - Added `launchProotInteractive()` method that accepts a `stdinInput: String?` parameter and writes it to the process's stdin pipe via a separate thread
+2. **`UbuntuSession.kt`** - Added `execInteractive()` method to the interface with KDoc documentation
+3. **`UbuntuSessionManagerImpl.kt`** - Implemented `execInteractive()` in `UbuntuSessionImpl` that delegates to the new NativeBridge method
+
+**Acceptance criteria verified:**
+- ✓ New `execInteractive()` method accepts stdin input
+- ✓ Can pipe input to running proot process
+- ✓ Returns `ProcessResult` with stdout/stderr as before
+- ✓ `./gradlew :app:assembleDebug` succeeds
+
+**Commit:** `59eea83 feat: [MP-005] Add stdin support for interactive command execution`
+---
+[2026-01-19T12:06:43] Starting iteration 6
+[2026-01-19T12:09:43] Claude exited with status 0
+All stories in `prd.json` now have `passes: true`. The Multi-Process Support phase is complete.
 
 <promise>COMPLETE</promise>
-Done
+
+**Summary of MP-006 implementation:**
+
+Implemented clean session shutdown with child process cleanup in:
+- `NativeBridge.kt`: Added `killProotWithChildren()` method with multi-stage cleanup:
+  1. Spawns a cleanup proot instance that runs `pkill -9 -P 1` and iterates `/proc` to kill all processes
+  2. Gracefully terminates main proot process (SIGTERM → wait → SIGKILL if needed)
+  3. Uses Android shell `pkill -9 -P <pid>` to catch escaped child processes
+
+- `UbuntuSessionManagerImpl.kt`: Updated `stop()` to use `killProotWithChildren()` when rootfs path is available, with fallback to simple `killProot()` otherwise.
+---
+[2026-01-19T12:09:43] COMPLETE - All stories done

@@ -5,6 +5,7 @@ import android.os.Build
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import android.util.Log
 import timber.log.Timber
@@ -14,6 +15,15 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "NativeBridge"
+
+/**
+ * Handle to a running proot process, exposing the actual OS PID.
+ */
+data class ProotProcessHandle(
+    val sessionId: String,
+    val pid: Long,
+    val isAlive: Boolean
+)
 
 @Singleton
 class NativeBridge @Inject constructor(
@@ -46,7 +56,8 @@ class NativeBridge @Inject constructor(
         File(libDir, "libtalloc.so.2")
     }
 
-    private var prootProcess: Process? = null
+    // Map of sessionId -> Process for tracking multiple concurrent processes
+    private val processMap: MutableMap<String, Process> = mutableMapOf()
 
     init {
         Log.d(TAG, "NativeBridge initialized, nativeLibDir=${nativeLibDir.absolutePath}")
@@ -99,17 +110,31 @@ class NativeBridge @Inject constructor(
         }
     }
 
+    /**
+     * Launches a proot process for the given session.
+     *
+     * @param sessionId Unique identifier for this session
+     * @param rootfsPath Path to the rootfs directory
+     * @param sessionDir Working directory for the session
+     * @param bindMounts List of bind mount paths
+     * @param envVars Environment variables to set
+     * @param command Command to execute inside proot
+     * @param timeoutSeconds Maximum time to wait for command completion.
+     *        Use 0 or negative value to wait indefinitely (no timeout).
+     *        Default is 300 seconds (5 minutes).
+     */
     suspend fun launchProot(
+        sessionId: String,
         rootfsPath: String,
         sessionDir: String,
         bindMounts: List<String>,
         envVars: Map<String, String>,
         command: String,
-        timeoutSeconds: Long = 30
+        timeoutSeconds: Long = 300
     ): com.udroid.app.model.ProcessResult = withContext(Dispatchers.IO) {
         Log.d(TAG, "=== launchProot called ===")
-        Log.d(TAG, "rootfs=$rootfsPath, command=$command, timeout=${timeoutSeconds}s")
-        Timber.d("Launching PRoot: rootfs=$rootfsPath, command=$command, timeout=${timeoutSeconds}s")
+        Log.d(TAG, "sessionId=$sessionId, rootfs=$rootfsPath, command=$command, timeout=${timeoutSeconds}s")
+        Timber.d("Launching PRoot: sessionId=$sessionId, rootfs=$rootfsPath, command=$command, timeout=${timeoutSeconds}s")
 
         Log.d(TAG, "Ensuring proot is extracted...")
         if (!ensureProotExtracted()) {
@@ -168,60 +193,100 @@ class NativeBridge @Inject constructor(
 
             Log.d(TAG, "Starting proot process...")
             val process = processBuilder.start()
-            Log.d(TAG, "PRoot process started, waiting for completion (timeout: ${timeoutSeconds}s)")
-            Timber.d("PRoot process started")
+
+            // Store process in map for tracking
+            synchronized(processMap) {
+                processMap[sessionId] = process
+            }
+            Log.d(TAG, "PRoot process started for session $sessionId, waiting for completion (timeout: ${timeoutSeconds}s)")
+            Timber.d("PRoot process started for session $sessionId")
 
             // Read output with timeout
             val stdoutBuilder = StringBuilder()
             val stderrBuilder = StringBuilder()
 
-            // Start readers in background
+            // Use CountDownLatch to properly wait for reader threads to complete
+            val readersLatch = CountDownLatch(2)
+
+            // Start readers in background - they signal completion via latch
             val stdoutReader = Thread {
                 try {
-                    process.inputStream.bufferedReader().forEachLine { line ->
-                        stdoutBuilder.appendLine(line)
+                    process.inputStream.bufferedReader().use { reader ->
+                        reader.forEachLine { line ->
+                            synchronized(stdoutBuilder) {
+                                stdoutBuilder.appendLine(line)
+                            }
+                        }
                     }
                 } catch (e: Exception) {
                     Timber.w("Stdout read interrupted: ${e.message}")
+                } finally {
+                    readersLatch.countDown()
                 }
             }
             val stderrReader = Thread {
                 try {
-                    process.errorStream.bufferedReader().forEachLine { line ->
-                        stderrBuilder.appendLine(line)
+                    process.errorStream.bufferedReader().use { reader ->
+                        reader.forEachLine { line ->
+                            synchronized(stderrBuilder) {
+                                stderrBuilder.appendLine(line)
+                            }
+                        }
                     }
                 } catch (e: Exception) {
                     Timber.w("Stderr read interrupted: ${e.message}")
+                } finally {
+                    readersLatch.countDown()
                 }
             }
 
             stdoutReader.start()
             stderrReader.start()
 
-            // Wait with timeout
-            Log.d(TAG, "Calling waitFor with timeout ${timeoutSeconds}s...")
-            val completed = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
-            Log.d(TAG, "waitFor returned: completed=$completed")
-            val exitCode = if (completed) {
-                val code = process.exitValue()
+            // Wait with timeout (0 or negative means wait indefinitely)
+            val exitCode = if (timeoutSeconds <= 0) {
+                Log.d(TAG, "Calling waitFor with no timeout (indefinite wait)...")
+                val code = process.waitFor()
                 Log.d(TAG, "Process completed with exit code: $code")
                 code
             } else {
-                Log.w(TAG, "PRoot command timed out after ${timeoutSeconds}s, killing process")
-                Timber.w("PRoot command timed out after ${timeoutSeconds}s, killing process")
-                process.destroyForcibly()
-                -1
+                Log.d(TAG, "Calling waitFor with timeout ${timeoutSeconds}s...")
+                val completed = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
+                Log.d(TAG, "waitFor returned: completed=$completed")
+                if (completed) {
+                    val code = process.exitValue()
+                    Log.d(TAG, "Process completed with exit code: $code")
+                    code
+                } else {
+                    Log.w(TAG, "PRoot command timed out after ${timeoutSeconds}s, killing process")
+                    Timber.w("PRoot command timed out after ${timeoutSeconds}s, killing process")
+                    process.destroyForcibly()
+                    -1
+                }
             }
 
-            // Give readers a moment to finish
-            stdoutReader.join(500)
-            stderrReader.join(500)
+            // Wait for reader threads to complete.
+            // On normal completion: process has exited, streams will EOF, readers finish quickly.
+            // On timeout: destroyForcibly closes streams, readers get IOException and finish.
+            // Use a reasonable timeout (5s) to avoid hanging forever if something goes wrong.
+            val readersFinished = readersLatch.await(5, TimeUnit.SECONDS)
+            if (!readersFinished) {
+                Log.w(TAG, "Reader threads did not complete within 5s, interrupting...")
+                stdoutReader.interrupt()
+                stderrReader.interrupt()
+            }
 
-            val stdout = stdoutBuilder.toString()
-            val stderr = stderrBuilder.toString()
+            // Remove process from map after completion
+            synchronized(processMap) {
+                processMap.remove(sessionId)
+            }
 
-            Log.d(TAG, "PRoot exited with code: $exitCode, stdout: ${stdout.take(200)}, stderr: ${stderr.take(200)}")
-            Timber.d("PRoot exited with code: $exitCode, stdout: ${stdout.take(100)}")
+            // Read final output (synchronized to ensure we see all appended data)
+            val stdout = synchronized(stdoutBuilder) { stdoutBuilder.toString() }
+            val stderr = synchronized(stderrBuilder) { stderrBuilder.toString() }
+
+            Log.d(TAG, "PRoot exited with code: $exitCode for session $sessionId, stdout: ${stdout.take(200)}, stderr: ${stderr.take(200)}")
+            Timber.d("PRoot exited with code: $exitCode for session $sessionId, stdout: ${stdout.take(100)}")
 
             com.udroid.app.model.ProcessResult(
                 exitCode = exitCode,
@@ -238,47 +303,436 @@ class NativeBridge @Inject constructor(
         }
     }
 
-    suspend fun waitForProot(pid: Long, timeoutMs: Long): Int = withContext(Dispatchers.IO) {
-        Timber.d("Waiting for PRoot PID $pid (timeout: $timeoutMs ms)")
+    suspend fun waitForProot(sessionId: String, timeoutMs: Long): Int = withContext(Dispatchers.IO) {
+        Timber.d("Waiting for PRoot session $sessionId (timeout: $timeoutMs ms)")
         try {
-            prootProcess?.waitFor()?.also {
-                Timber.d("PRoot exited with code: $it")
+            val process = synchronized(processMap) { processMap[sessionId] }
+            process?.waitFor()?.also {
+                Timber.d("PRoot session $sessionId exited with code: $it")
+                synchronized(processMap) {
+                    processMap.remove(sessionId)
+                }
             } ?: -1
         } catch (e: Exception) {
-            Timber.e(e, "Error waiting for PRoot")
+            Timber.e(e, "Error waiting for PRoot session $sessionId")
             -1
         }
     }
 
-    suspend fun killProot(pid: Long, signal: Int): Boolean = withContext(Dispatchers.IO) {
-        Timber.d("Killing PRoot PID $pid with signal $signal")
+    suspend fun killProot(sessionId: String, signal: Int): Boolean = withContext(Dispatchers.IO) {
+        Timber.d("Killing PRoot session $sessionId with signal $signal")
         try {
-            prootProcess?.destroy()
-            prootProcess = null
-            true
+            val process = synchronized(processMap) { processMap.remove(sessionId) }
+            if (process != null) {
+                if (signal == 9) {
+                    process.destroyForcibly()
+                } else {
+                    process.destroy()
+                }
+                true
+            } else {
+                Timber.w("No process found for session $sessionId")
+                false
+            }
         } catch (e: Exception) {
-            Timber.e(e, "Error killing PRoot")
+            Timber.e(e, "Error killing PRoot session $sessionId")
             false
         }
     }
 
-    suspend fun isProotRunning(pid: Long): Boolean = withContext(Dispatchers.IO) {
-        prootProcess?.isAlive ?: false
+    /**
+     * Kills a proot process and all its child processes to prevent orphans.
+     *
+     * This method first attempts to kill all descendant processes spawned inside
+     * the proot environment (e.g., services started with nohup), then kills the
+     * main proot process itself.
+     *
+     * @param sessionId The session ID to kill
+     * @param rootfsPath Path to the rootfs (needed to run cleanup command inside proot)
+     * @param sessionDir Working directory for the session
+     * @return true if the process was successfully killed, false otherwise
+     */
+    suspend fun killProotWithChildren(
+        sessionId: String,
+        rootfsPath: String,
+        sessionDir: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        Log.d(TAG, "=== killProotWithChildren called for session $sessionId ===")
+        Timber.d("Killing PRoot session $sessionId with all child processes")
+
+        try {
+            // Get the main proot process first
+            val mainProcess = synchronized(processMap) { processMap[sessionId] }
+            if (mainProcess == null) {
+                Log.w(TAG, "No main process found for session $sessionId")
+                Timber.w("No main process found for session $sessionId")
+                return@withContext false
+            }
+
+            val mainPid = getProcessPid(mainProcess)
+            Log.d(TAG, "Main proot process PID: $mainPid")
+
+            // Step 1: Run a cleanup command inside a fresh proot instance to kill all
+            // processes. This catches services started with nohup, background jobs, etc.
+            // We use 'kill -9 -1' which kills all processes the user can kill (except init).
+            // Inside proot with -0 (fake root), this kills all processes in the container.
+            Log.d(TAG, "Running cleanup command inside proot to kill child processes...")
+
+            val cleanupResult = launchProot(
+                sessionId = "${sessionId}_cleanup",
+                rootfsPath = rootfsPath,
+                sessionDir = sessionDir,
+                bindMounts = emptyList(),
+                envVars = emptyMap(),
+                // Kill all processes except PID 1 (init). The -9 signal (SIGKILL) ensures
+                // processes can't ignore it. pkill -9 -P 1 kills processes with PPID 1.
+                // We also try to kill by process group in case some processes re-parented.
+                command = """
+                    # Try to kill all user processes (this is safe inside proot fake root)
+                    # First try killing all processes with PPID 1 (re-parented orphans)
+                    pkill -9 -P 1 2>/dev/null || true
+                    # Then kill all processes except ourselves and init
+                    for pid in $(ls /proc 2>/dev/null | grep -E '^[0-9]+$'); do
+                        if [ "${'$'}pid" != "1" ] && [ "${'$'}pid" != "$$" ]; then
+                            kill -9 "${'$'}pid" 2>/dev/null || true
+                        fi
+                    done
+                    # Final cleanup: try kill -1 which sends signal to all processes
+                    kill -9 -1 2>/dev/null || true
+                    echo "Cleanup complete"
+                """.trimIndent(),
+                timeoutSeconds = 5 // Short timeout since this is just cleanup
+            )
+
+            Log.d(TAG, "Cleanup result: exitCode=${cleanupResult.exitCode}, stdout=${cleanupResult.stdout.take(100)}")
+
+            // Step 2: Now kill the main proot process
+            Log.d(TAG, "Killing main proot process for session $sessionId")
+            val removed = synchronized(processMap) { processMap.remove(sessionId) }
+            if (removed != null) {
+                // First try SIGTERM to allow graceful shutdown
+                removed.destroy()
+
+                // Wait briefly for graceful shutdown
+                val exited = removed.waitFor(500, TimeUnit.MILLISECONDS)
+                if (!exited) {
+                    // Force kill if still running
+                    Log.d(TAG, "Process didn't exit gracefully, force killing...")
+                    removed.destroyForcibly()
+                    removed.waitFor(1, TimeUnit.SECONDS)
+                }
+            }
+
+            // Step 3: On Android, we can also try to kill any remaining processes by PPID
+            // using the shell (this catches processes that may have escaped proot)
+            if (mainPid > 0) {
+                Log.d(TAG, "Cleaning up any remaining child processes of PID $mainPid")
+                try {
+                    // Use Android's process killer to clean up orphans
+                    val pkillProcess = ProcessBuilder("sh", "-c",
+                        "pkill -9 -P $mainPid 2>/dev/null || true"
+                    ).start()
+                    pkillProcess.waitFor(1, TimeUnit.SECONDS)
+                    pkillProcess.destroyForcibly()
+                } catch (e: Exception) {
+                    Log.w(TAG, "pkill cleanup failed (expected on some devices): ${e.message}")
+                }
+            }
+
+            Log.d(TAG, "Session $sessionId terminated with child process cleanup")
+            Timber.d("Session $sessionId terminated with child process cleanup")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Error killing PRoot session $sessionId with children: ${e.message}", e)
+            Timber.e(e, "Error killing PRoot session $sessionId with children")
+
+            // Fallback: try simple kill
+            try {
+                val process = synchronized(processMap) { processMap.remove(sessionId) }
+                process?.destroyForcibly()
+            } catch (e2: Exception) {
+                Timber.w("Fallback kill also failed: ${e2.message}")
+            }
+            false
+        }
     }
 
-    suspend fun getProotStdout(pid: Long): String = withContext(Dispatchers.IO) {
+    suspend fun isProotRunning(sessionId: String): Boolean = withContext(Dispatchers.IO) {
+        val process = synchronized(processMap) { processMap[sessionId] }
+        process?.isAlive ?: false
+    }
+
+    /**
+     * Returns a ProcessHandle containing the actual OS PID for the given session.
+     * Returns null if no process is running for that session.
+     */
+    suspend fun getProcessHandle(sessionId: String): ProotProcessHandle? = withContext(Dispatchers.IO) {
+        val process = synchronized(processMap) { processMap[sessionId] } ?: return@withContext null
+        val pid = getProcessPid(process)
+        ProotProcessHandle(
+            sessionId = sessionId,
+            pid = pid,
+            isAlive = process.isAlive
+        )
+    }
+
+    /**
+     * Returns the actual OS PID for the given session.
+     * Returns -1 if no process is running for that session.
+     */
+    suspend fun getPid(sessionId: String): Long = withContext(Dispatchers.IO) {
+        val process = synchronized(processMap) { processMap[sessionId] } ?: return@withContext -1L
+        getProcessPid(process)
+    }
+
+    /**
+     * Extract the OS PID from a Process instance.
+     * Uses reflection to get the pid field since Android's ProcessImpl
+     * doesn't expose ProcessHandle from Java 9+.
+     */
+    private fun getProcessPid(process: Process): Long {
+        return try {
+            // Android uses java.lang.UNIXProcess (or ProcessImpl) which has a "pid" field
+            // This works across all Android API levels
+            val processClass = process.javaClass
+
+            // Try direct "pid" field first (common in Android's UNIXProcess)
+            val pidField = try {
+                processClass.getDeclaredField("pid")
+            } catch (e: NoSuchFieldException) {
+                // Fallback: try superclass if field not found
+                processClass.superclass?.getDeclaredField("pid")
+            }
+
+            pidField?.let {
+                it.isAccessible = true
+                it.getInt(process).toLong()
+            } ?: -1L
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to get process PID via reflection, falling back to -1")
+            -1L
+        }
+    }
+
+    suspend fun getProotStdout(sessionId: String): String = withContext(Dispatchers.IO) {
         try {
-            prootProcess?.inputStream?.bufferedReader()?.readLine() ?: ""
+            val process = synchronized(processMap) { processMap[sessionId] }
+            process?.inputStream?.bufferedReader()?.readLine() ?: ""
         } catch (e: Exception) {
             ""
         }
     }
 
-    suspend fun getProotStderr(pid: Long): String = withContext(Dispatchers.IO) {
+    suspend fun getProotStderr(sessionId: String): String = withContext(Dispatchers.IO) {
         try {
-            prootProcess?.errorStream?.bufferedReader()?.readLine() ?: ""
+            val process = synchronized(processMap) { processMap[sessionId] }
+            process?.errorStream?.bufferedReader()?.readLine() ?: ""
         } catch (e: Exception) {
             ""
+        }
+    }
+
+    /**
+     * Launches a proot process for the given session with stdin input support.
+     * This is useful for interactive commands that require input piped to them.
+     *
+     * @param sessionId Unique identifier for this session
+     * @param rootfsPath Path to the rootfs directory
+     * @param sessionDir Working directory for the session
+     * @param bindMounts List of bind mount paths
+     * @param envVars Environment variables to set
+     * @param command Command to execute inside proot
+     * @param stdinInput Input to pipe to the process's stdin. Can be null for no input.
+     * @param timeoutSeconds Maximum time to wait for command completion.
+     *        Use 0 or negative value to wait indefinitely (no timeout).
+     *        Default is 300 seconds (5 minutes).
+     */
+    suspend fun launchProotInteractive(
+        sessionId: String,
+        rootfsPath: String,
+        sessionDir: String,
+        bindMounts: List<String>,
+        envVars: Map<String, String>,
+        command: String,
+        stdinInput: String?,
+        timeoutSeconds: Long = 300
+    ): com.udroid.app.model.ProcessResult = withContext(Dispatchers.IO) {
+        Log.d(TAG, "=== launchProotInteractive called ===")
+        Log.d(TAG, "sessionId=$sessionId, rootfs=$rootfsPath, command=$command, stdinInput=${stdinInput?.take(50)}, timeout=${timeoutSeconds}s")
+        Timber.d("Launching PRoot interactive: sessionId=$sessionId, command=$command, hasStdin=${stdinInput != null}")
+
+        Log.d(TAG, "Ensuring proot is extracted...")
+        if (!ensureProotExtracted()) {
+            Log.e(TAG, "Failed to extract proot binaries!")
+            return@withContext com.udroid.app.model.ProcessResult(
+                exitCode = -1,
+                stdout = "",
+                stderr = "Failed to extract proot"
+            )
+        }
+
+        try {
+            Log.d(TAG, "Building process command...")
+            val processBuilder = ProcessBuilder().apply {
+                val cmd = mutableListOf(
+                    prootBinary.absolutePath,
+                    "-0",  // Fake root
+                    "-r", rootfsPath,  // Root filesystem
+                    "-b", "/dev",
+                    "-b", "/proc",
+                    "-b", "/sys",
+                    "-w", "/root"
+                )
+
+                // Add bind mounts
+                bindMounts.forEach { mount ->
+                    cmd.add("-b")
+                    cmd.add(mount)
+                }
+
+                // Add command
+                cmd.add("/bin/sh")
+                cmd.add("-c")
+                cmd.add(command.ifEmpty { "cat" }) // Default to cat for pure stdin passthrough
+
+                Log.d(TAG, "Full command: ${cmd.joinToString(" ")}")
+                command(cmd)
+
+                // Set environment
+                environment().apply {
+                    put("PROOT_LOADER", loaderBinary.absolutePath)
+                    put("LD_LIBRARY_PATH", "${libDir.absolutePath}:${nativeLibDir.absolutePath}")
+                    put("HOME", "/root")
+                    put("USER", "root")
+                    put("TERM", "xterm-256color")
+                    put("LANG", "C.UTF-8")
+                    put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+                    envVars.forEach { (k, v) -> put(k, v) }
+                }
+
+                directory(File(sessionDir))
+                redirectErrorStream(false)
+            }
+
+            Log.d(TAG, "Starting proot process...")
+            val process = processBuilder.start()
+
+            // Store process in map for tracking
+            synchronized(processMap) {
+                processMap[sessionId] = process
+            }
+            Log.d(TAG, "PRoot process started for session $sessionId")
+
+            // Write stdin input to the process if provided
+            if (stdinInput != null) {
+                Thread {
+                    try {
+                        process.outputStream.bufferedWriter().use { writer ->
+                            writer.write(stdinInput)
+                            writer.flush()
+                        }
+                        Log.d(TAG, "Stdin input written to process")
+                    } catch (e: Exception) {
+                        Timber.w("Failed to write stdin: ${e.message}")
+                    }
+                }.start()
+            }
+
+            // Read output with timeout
+            val stdoutBuilder = StringBuilder()
+            val stderrBuilder = StringBuilder()
+
+            // Use CountDownLatch to properly wait for reader threads to complete
+            val readersLatch = CountDownLatch(2)
+
+            // Start readers in background
+            val stdoutReader = Thread {
+                try {
+                    process.inputStream.bufferedReader().use { reader ->
+                        reader.forEachLine { line ->
+                            synchronized(stdoutBuilder) {
+                                stdoutBuilder.appendLine(line)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Timber.w("Stdout read interrupted: ${e.message}")
+                } finally {
+                    readersLatch.countDown()
+                }
+            }
+            val stderrReader = Thread {
+                try {
+                    process.errorStream.bufferedReader().use { reader ->
+                        reader.forEachLine { line ->
+                            synchronized(stderrBuilder) {
+                                stderrBuilder.appendLine(line)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Timber.w("Stderr read interrupted: ${e.message}")
+                } finally {
+                    readersLatch.countDown()
+                }
+            }
+
+            stdoutReader.start()
+            stderrReader.start()
+
+            // Wait with timeout
+            val exitCode = if (timeoutSeconds <= 0) {
+                Log.d(TAG, "Calling waitFor with no timeout (indefinite wait)...")
+                val code = process.waitFor()
+                Log.d(TAG, "Process completed with exit code: $code")
+                code
+            } else {
+                Log.d(TAG, "Calling waitFor with timeout ${timeoutSeconds}s...")
+                val completed = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
+                Log.d(TAG, "waitFor returned: completed=$completed")
+                if (completed) {
+                    val code = process.exitValue()
+                    Log.d(TAG, "Process completed with exit code: $code")
+                    code
+                } else {
+                    Log.w(TAG, "PRoot command timed out after ${timeoutSeconds}s, killing process")
+                    process.destroyForcibly()
+                    -1
+                }
+            }
+
+            // Wait for reader threads to complete
+            val readersFinished = readersLatch.await(5, TimeUnit.SECONDS)
+            if (!readersFinished) {
+                Log.w(TAG, "Reader threads did not complete within 5s, interrupting...")
+                stdoutReader.interrupt()
+                stderrReader.interrupt()
+            }
+
+            // Remove process from map after completion
+            synchronized(processMap) {
+                processMap.remove(sessionId)
+            }
+
+            // Read final output
+            val stdout = synchronized(stdoutBuilder) { stdoutBuilder.toString() }
+            val stderr = synchronized(stderrBuilder) { stderrBuilder.toString() }
+
+            Log.d(TAG, "PRoot exited with code: $exitCode for session $sessionId")
+            Timber.d("PRoot interactive exited with code: $exitCode")
+
+            com.udroid.app.model.ProcessResult(
+                exitCode = exitCode,
+                stdout = stdout,
+                stderr = stderr
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to launch PRoot interactive")
+            com.udroid.app.model.ProcessResult(
+                exitCode = -1,
+                stdout = "",
+                stderr = e.message ?: "Unknown error"
+            )
         }
     }
 }

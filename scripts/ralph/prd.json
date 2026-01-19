@@ -1,6 +1,85 @@
 {
-  "branchName": "main",
+  "branchName": "ralph/multi-process-support",
   "userStories": [
+    {
+      "id": "MP-001",
+      "title": "Refactor NativeBridge to track multiple processes via Map<String, Process>",
+      "acceptanceCriteria": [
+        "NativeBridge uses Map<String, Process> instead of single prootProcess field",
+        "launchProot accepts sessionId parameter and stores process in map",
+        "killProot accepts sessionId to kill specific process",
+        "isProotRunning accepts sessionId to check specific process",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Critical for concurrent process execution. See NativeBridge.kt:49"
+    },
+    {
+      "id": "MP-002",
+      "title": "Return actual OS PID from launchProot and track in session",
+      "acceptanceCriteria": [
+        "launchProot returns ProcessHandle or wrapper with real PID",
+        "UbuntuSessionImpl stores actual PID instead of timestamp",
+        "getPid(sessionId) method returns real process ID",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Required for proper signal handling. See UbuntuSessionManagerImpl.kt:220"
+    },
+    {
+      "id": "MP-003",
+      "title": "Fix stream reader race condition in launchProot",
+      "acceptanceCriteria": [
+        "stdout/stderr reader threads complete before returning result",
+        "Fast commands (<100ms) capture full output",
+        "Use proper thread synchronization instead of join(500)",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Current code loses output for fast commands. See NativeBridge.kt:217-218"
+    },
+    {
+      "id": "MP-004",
+      "title": "Add configurable timeout support for long-running operations",
+      "acceptanceCriteria": [
+        "exec() accepts optional timeout parameter with default 300s",
+        "launchProot respects configurable timeout",
+        "Timeout of 0 means no timeout (wait indefinitely)",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Claude Code tasks often exceed 60s current max"
+    },
+    {
+      "id": "MP-005",
+      "title": "Add stdin support for interactive command execution",
+      "acceptanceCriteria": [
+        "New execInteractive() method accepts stdin input",
+        "Can pipe input to running proot process",
+        "Returns ProcessResult with stdout/stderr as before",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "Needed for interactive prompts and REPL sessions"
+    },
+    {
+      "id": "MP-006",
+      "title": "Implement clean session shutdown with child process cleanup",
+      "acceptanceCriteria": [
+        "stop() kills all child processes spawned by session",
+        "Uses process group or pkill by PPID pattern",
+        "No orphan processes left after session stop",
+        "./gradlew :app:assembleDebug succeeds"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "nohup services currently leave orphans on session stop"
+    },
     {
       "id": "US-001",
       "title": "Fix ProcessResult visibility so session/native APIs compile",

@@ -135,11 +135,21 @@ class UbuntuSessionImpl(
 ) : UbuntuSession {
 
     private var _state: SessionState = SessionState.Created
-    private var processPid: Long? = null
     private var vncPort: Int = 5901
     private var rootfsPath: java.io.File? = null
 
     override val state: SessionState get() = _state
+
+    /**
+     * Returns the actual OS PID of the running proot process.
+     * Returns -1 if the session is not running or the PID cannot be determined.
+     */
+    override suspend fun getPid(): Long {
+        if (_state !is SessionState.Running) {
+            return -1L
+        }
+        return nativeBridge.getPid(id)
+    }
 
     override val stateFlow: Flow<SessionState> =
         sessionRepository.observeSessions()
@@ -194,6 +204,7 @@ class UbuntuSessionImpl(
             Log.d(TAG, "Testing proot environment with 10s timeout...")
             Timber.d("Testing proot environment...")
             val testResult = nativeBridge.launchProot(
+                sessionId = id,
                 rootfsPath = rootfsPath!!.absolutePath,
                 sessionDir = rootfsPath!!.absolutePath,
                 bindMounts = emptyList(),
@@ -217,7 +228,6 @@ class UbuntuSessionImpl(
             Log.d(TAG, "PRoot test successful: ${testResult.stdout.trim()}")
             Timber.d("PRoot test successful: ${testResult.stdout.trim()}")
 
-            processPid = System.currentTimeMillis()
             vncPort = 5901
 
             _state = SessionState.Running(vncPort)
@@ -243,19 +253,33 @@ class UbuntuSessionImpl(
 
             _state = SessionState.Stopping
             sessionRepository.updateSessionState(id, _state.toData())
-            
-            Timber.d("Stopping session: $id")
-            
-            processPid?.let { pid ->
-                nativeBridge.killProot(pid, 15) // SIGTERM
+
+            Log.d(TAG, "Stopping session: $id with child process cleanup")
+            Timber.d("Stopping session: $id with child process cleanup")
+
+            // Kill the proot process and all its children to prevent orphans.
+            // This handles services started with nohup, background jobs, etc.
+            val path = rootfsPath
+            if (path != null) {
+                nativeBridge.killProotWithChildren(
+                    sessionId = id,
+                    rootfsPath = path.absolutePath,
+                    sessionDir = path.absolutePath
+                )
+            } else {
+                // Fallback to simple kill if rootfs path is not available
+                Log.w(TAG, "Rootfs path not available, falling back to simple kill")
+                nativeBridge.killProot(id, 15) // SIGTERM
             }
-            
+
             _state = SessionState.Stopped
             sessionRepository.updateSessionState(id, _state.toData())
-            
+
+            Log.d(TAG, "Session stopped: $id")
             Timber.d("Session stopped: $id")
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e(TAG, "Failed to stop session: $id - ${e.message}", e)
             Timber.e(e, "Failed to stop session: $id")
             _state = SessionState.Error(e.message ?: "Unknown error")
             sessionRepository.updateSessionState(id, _state.toData())
@@ -274,6 +298,7 @@ class UbuntuSessionImpl(
             Timber.d("Executing command in session $id: $command")
 
             val result = nativeBridge.launchProot(
+                sessionId = id,
                 rootfsPath = path.absolutePath,
                 sessionDir = path.absolutePath,
                 bindMounts = emptyList(),
@@ -291,6 +316,44 @@ class UbuntuSessionImpl(
             Result.success(result)
         } catch (e: Exception) {
             Timber.e(e, "Failed to execute command in session $id")
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun execInteractive(
+        command: String,
+        stdinInput: String?,
+        timeoutSeconds: Long
+    ): Result<ProcessResult> {
+        return try {
+            if (_state !is SessionState.Running) {
+                return Result.failure(IllegalStateException("Session not running"))
+            }
+
+            val path = rootfsPath ?: return Result.failure(IllegalStateException("Rootfs path not set"))
+
+            Timber.d("Executing interactive command in session $id: $command, stdinInput=${stdinInput?.take(50)}")
+
+            val result = nativeBridge.launchProotInteractive(
+                sessionId = id,
+                rootfsPath = path.absolutePath,
+                sessionDir = path.absolutePath,
+                bindMounts = emptyList(),
+                envVars = mapOf(
+                    "HOME" to "/home/udroid",
+                    "USER" to "udroid",
+                    "TERM" to "xterm-256color",
+                    "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+                ),
+                command = command,
+                stdinInput = stdinInput,
+                timeoutSeconds = timeoutSeconds
+            )
+
+            Timber.d("Interactive command result: exit=${result.exitCode}, stdout=${result.stdout.take(100)}")
+            Result.success(result)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to execute interactive command in session $id")
             Result.failure(e)
         }
     }
