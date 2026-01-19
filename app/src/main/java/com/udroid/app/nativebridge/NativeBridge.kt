@@ -46,7 +46,8 @@ class NativeBridge @Inject constructor(
         File(libDir, "libtalloc.so.2")
     }
 
-    private var prootProcess: Process? = null
+    // Map of sessionId -> Process for tracking multiple concurrent processes
+    private val processMap: MutableMap<String, Process> = mutableMapOf()
 
     init {
         Log.d(TAG, "NativeBridge initialized, nativeLibDir=${nativeLibDir.absolutePath}")
@@ -100,6 +101,7 @@ class NativeBridge @Inject constructor(
     }
 
     suspend fun launchProot(
+        sessionId: String,
         rootfsPath: String,
         sessionDir: String,
         bindMounts: List<String>,
@@ -108,8 +110,8 @@ class NativeBridge @Inject constructor(
         timeoutSeconds: Long = 30
     ): com.udroid.app.model.ProcessResult = withContext(Dispatchers.IO) {
         Log.d(TAG, "=== launchProot called ===")
-        Log.d(TAG, "rootfs=$rootfsPath, command=$command, timeout=${timeoutSeconds}s")
-        Timber.d("Launching PRoot: rootfs=$rootfsPath, command=$command, timeout=${timeoutSeconds}s")
+        Log.d(TAG, "sessionId=$sessionId, rootfs=$rootfsPath, command=$command, timeout=${timeoutSeconds}s")
+        Timber.d("Launching PRoot: sessionId=$sessionId, rootfs=$rootfsPath, command=$command, timeout=${timeoutSeconds}s")
 
         Log.d(TAG, "Ensuring proot is extracted...")
         if (!ensureProotExtracted()) {
@@ -168,8 +170,13 @@ class NativeBridge @Inject constructor(
 
             Log.d(TAG, "Starting proot process...")
             val process = processBuilder.start()
-            Log.d(TAG, "PRoot process started, waiting for completion (timeout: ${timeoutSeconds}s)")
-            Timber.d("PRoot process started")
+
+            // Store process in map for tracking
+            synchronized(processMap) {
+                processMap[sessionId] = process
+            }
+            Log.d(TAG, "PRoot process started for session $sessionId, waiting for completion (timeout: ${timeoutSeconds}s)")
+            Timber.d("PRoot process started for session $sessionId")
 
             // Read output with timeout
             val stdoutBuilder = StringBuilder()
@@ -217,11 +224,16 @@ class NativeBridge @Inject constructor(
             stdoutReader.join(500)
             stderrReader.join(500)
 
+            // Remove process from map after completion
+            synchronized(processMap) {
+                processMap.remove(sessionId)
+            }
+
             val stdout = stdoutBuilder.toString()
             val stderr = stderrBuilder.toString()
 
-            Log.d(TAG, "PRoot exited with code: $exitCode, stdout: ${stdout.take(200)}, stderr: ${stderr.take(200)}")
-            Timber.d("PRoot exited with code: $exitCode, stdout: ${stdout.take(100)}")
+            Log.d(TAG, "PRoot exited with code: $exitCode for session $sessionId, stdout: ${stdout.take(200)}, stderr: ${stderr.take(200)}")
+            Timber.d("PRoot exited with code: $exitCode for session $sessionId, stdout: ${stdout.take(100)}")
 
             com.udroid.app.model.ProcessResult(
                 exitCode = exitCode,
@@ -238,45 +250,61 @@ class NativeBridge @Inject constructor(
         }
     }
 
-    suspend fun waitForProot(pid: Long, timeoutMs: Long): Int = withContext(Dispatchers.IO) {
-        Timber.d("Waiting for PRoot PID $pid (timeout: $timeoutMs ms)")
+    suspend fun waitForProot(sessionId: String, timeoutMs: Long): Int = withContext(Dispatchers.IO) {
+        Timber.d("Waiting for PRoot session $sessionId (timeout: $timeoutMs ms)")
         try {
-            prootProcess?.waitFor()?.also {
-                Timber.d("PRoot exited with code: $it")
+            val process = synchronized(processMap) { processMap[sessionId] }
+            process?.waitFor()?.also {
+                Timber.d("PRoot session $sessionId exited with code: $it")
+                synchronized(processMap) {
+                    processMap.remove(sessionId)
+                }
             } ?: -1
         } catch (e: Exception) {
-            Timber.e(e, "Error waiting for PRoot")
+            Timber.e(e, "Error waiting for PRoot session $sessionId")
             -1
         }
     }
 
-    suspend fun killProot(pid: Long, signal: Int): Boolean = withContext(Dispatchers.IO) {
-        Timber.d("Killing PRoot PID $pid with signal $signal")
+    suspend fun killProot(sessionId: String, signal: Int): Boolean = withContext(Dispatchers.IO) {
+        Timber.d("Killing PRoot session $sessionId with signal $signal")
         try {
-            prootProcess?.destroy()
-            prootProcess = null
-            true
+            val process = synchronized(processMap) { processMap.remove(sessionId) }
+            if (process != null) {
+                if (signal == 9) {
+                    process.destroyForcibly()
+                } else {
+                    process.destroy()
+                }
+                true
+            } else {
+                Timber.w("No process found for session $sessionId")
+                false
+            }
         } catch (e: Exception) {
-            Timber.e(e, "Error killing PRoot")
+            Timber.e(e, "Error killing PRoot session $sessionId")
             false
         }
     }
 
-    suspend fun isProotRunning(pid: Long): Boolean = withContext(Dispatchers.IO) {
-        prootProcess?.isAlive ?: false
+    suspend fun isProotRunning(sessionId: String): Boolean = withContext(Dispatchers.IO) {
+        val process = synchronized(processMap) { processMap[sessionId] }
+        process?.isAlive ?: false
     }
 
-    suspend fun getProotStdout(pid: Long): String = withContext(Dispatchers.IO) {
+    suspend fun getProotStdout(sessionId: String): String = withContext(Dispatchers.IO) {
         try {
-            prootProcess?.inputStream?.bufferedReader()?.readLine() ?: ""
+            val process = synchronized(processMap) { processMap[sessionId] }
+            process?.inputStream?.bufferedReader()?.readLine() ?: ""
         } catch (e: Exception) {
             ""
         }
     }
 
-    suspend fun getProotStderr(pid: Long): String = withContext(Dispatchers.IO) {
+    suspend fun getProotStderr(sessionId: String): String = withContext(Dispatchers.IO) {
         try {
-            prootProcess?.errorStream?.bufferedReader()?.readLine() ?: ""
+            val process = synchronized(processMap) { processMap[sessionId] }
+            process?.errorStream?.bufferedReader()?.readLine() ?: ""
         } catch (e: Exception) {
             ""
         }

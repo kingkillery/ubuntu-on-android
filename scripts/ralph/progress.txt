@@ -11,6 +11,37 @@ See prd-server.json for 8 new user stories targeting:
 - SSH/proxy/API server hosting
 - One-click service templates
 
+## Phase 3: Multi-Process Support
+See prd.json for 6 MP-* stories enabling concurrent process execution.
+
+---
+
+## [2026-01-19] - MP-001
+- **What was implemented**: Refactored NativeBridge to track multiple processes via Map<String, Process>
+- **Files changed**:
+  - `app/src/main/java/com/udroid/app/nativebridge/NativeBridge.kt`:
+    - Replaced single `prootProcess: Process?` field with `processMap: MutableMap<String, Process>`
+    - Added `sessionId: String` parameter to `launchProot()` - stores process in map after start, removes on completion
+    - Updated `killProot(sessionId: String, signal: Int)` - looks up and removes process from map by sessionId
+    - Updated `isProotRunning(sessionId: String)` - checks if process exists and is alive in map
+    - Updated `waitForProot(sessionId: String, timeoutMs: Long)` - waits for specific session's process
+    - Updated `getProotStdout(sessionId: String)` and `getProotStderr(sessionId: String)` - read from specific session's streams
+    - Added `synchronized(processMap)` blocks for thread-safe access
+  - `app/src/main/java/com/udroid/app/session/UbuntuSessionManagerImpl.kt`:
+    - Updated all `nativeBridge.launchProot()` calls to pass `sessionId = id`
+    - Updated `nativeBridge.killProot()` call to pass session `id` instead of pid
+- **Acceptance criteria verification**:
+  - ✓ NativeBridge uses Map<String, Process> instead of single prootProcess field
+  - ✓ launchProot accepts sessionId parameter and stores process in map
+  - ✓ killProot accepts sessionId to kill specific process
+  - ✓ isProotRunning accepts sessionId to check specific process
+  - ✓ `./gradlew :app:assembleDebug` succeeds
+- **Learnings:**
+  - Use `synchronized(processMap)` for thread-safe access to the mutable map since coroutines may access from different threads
+  - The session id is a natural key for process tracking since each session maps to one proot instance
+  - Process cleanup must happen in both success path (after waitFor completes) and timeout path (after destroyForcibly)
+  - The old `processPid: Long?` field in UbuntuSessionImpl is now technically unused (still storing timestamp) - MP-002 will address returning actual OS PIDs
+
 ---
 
 ## [2026-01-10] - SRV-001 (In Progress)

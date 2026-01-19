@@ -194,6 +194,7 @@ class UbuntuSessionImpl(
             Log.d(TAG, "Testing proot environment with 10s timeout...")
             Timber.d("Testing proot environment...")
             val testResult = nativeBridge.launchProot(
+                sessionId = id,
                 rootfsPath = rootfsPath!!.absolutePath,
                 sessionDir = rootfsPath!!.absolutePath,
                 bindMounts = emptyList(),
@@ -245,10 +246,9 @@ class UbuntuSessionImpl(
             sessionRepository.updateSessionState(id, _state.toData())
             
             Timber.d("Stopping session: $id")
-            
-            processPid?.let { pid ->
-                nativeBridge.killProot(pid, 15) // SIGTERM
-            }
+
+            // Kill the proot process for this session
+            nativeBridge.killProot(id, 15) // SIGTERM
             
             _state = SessionState.Stopped
             sessionRepository.updateSessionState(id, _state.toData())
@@ -274,6 +274,7 @@ class UbuntuSessionImpl(
             Timber.d("Executing command in session $id: $command")
 
             val result = nativeBridge.launchProot(
+                sessionId = id,
                 rootfsPath = path.absolutePath,
                 sessionDir = path.absolutePath,
                 bindMounts = emptyList(),
