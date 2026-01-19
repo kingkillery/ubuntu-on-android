@@ -38,7 +38,7 @@
         "./gradlew :app:assembleDebug succeeds"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Current code loses output for fast commands. See NativeBridge.kt:217-218"
     },
     {
