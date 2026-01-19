@@ -304,4 +304,42 @@ class UbuntuSessionImpl(
             Result.failure(e)
         }
     }
+
+    override suspend fun execInteractive(
+        command: String,
+        stdinInput: String?,
+        timeoutSeconds: Long
+    ): Result<ProcessResult> {
+        return try {
+            if (_state !is SessionState.Running) {
+                return Result.failure(IllegalStateException("Session not running"))
+            }
+
+            val path = rootfsPath ?: return Result.failure(IllegalStateException("Rootfs path not set"))
+
+            Timber.d("Executing interactive command in session $id: $command, stdinInput=${stdinInput?.take(50)}")
+
+            val result = nativeBridge.launchProotInteractive(
+                sessionId = id,
+                rootfsPath = path.absolutePath,
+                sessionDir = path.absolutePath,
+                bindMounts = emptyList(),
+                envVars = mapOf(
+                    "HOME" to "/home/udroid",
+                    "USER" to "udroid",
+                    "TERM" to "xterm-256color",
+                    "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+                ),
+                command = command,
+                stdinInput = stdinInput,
+                timeoutSeconds = timeoutSeconds
+            )
+
+            Timber.d("Interactive command result: exit=${result.exitCode}, stdout=${result.stdout.take(100)}")
+            Result.success(result)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to execute interactive command in session $id")
+            Result.failure(e)
+        }
+    }
 }

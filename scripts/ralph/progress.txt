@@ -16,6 +16,34 @@ See prd.json for 6 MP-* stories enabling concurrent process execution.
 
 ---
 
+## [2026-01-19] - MP-005
+- **What was implemented**: Added stdin support for interactive command execution
+- **Files changed**:
+  - `app/src/main/java/com/udroid/app/nativebridge/NativeBridge.kt`:
+    - Added `launchProotInteractive()` method that accepts `stdinInput: String?` parameter
+    - Writes stdin input to process's outputStream via a separate thread before waiting for completion
+    - Uses `bufferedWriter().use { }` to properly close the stream after writing
+    - Reuses existing CountDownLatch-based stdout/stderr reader pattern from `launchProot()`
+  - `app/src/main/java/com/udroid/app/session/UbuntuSession.kt`:
+    - Added `execInteractive()` method to the interface with KDoc documentation
+    - Method accepts `command`, `stdinInput`, and optional `timeoutSeconds` parameters
+    - Returns `Result<ProcessResult>` consistent with existing `exec()` method
+  - `app/src/main/java/com/udroid/app/session/UbuntuSessionManagerImpl.kt`:
+    - Implemented `execInteractive()` in `UbuntuSessionImpl`
+    - Delegates to `nativeBridge.launchProotInteractive()` with same env vars as `exec()`
+- **Acceptance criteria verification**:
+  - ✓ New execInteractive() method accepts stdin input
+  - ✓ Can pipe input to running proot process (via process.outputStream.bufferedWriter())
+  - ✓ Returns ProcessResult with stdout/stderr as before
+  - ✓ `./gradlew :app:assembleDebug` succeeds
+- **Learnings:**
+  - `process.outputStream` is the stdin pipe to the subprocess (confusingly named from process perspective)
+  - Must write stdin in a separate thread to avoid deadlock if process buffer fills before we read stdout
+  - `bufferedWriter().use { }` ensures the stream is closed after writing, which signals EOF to the subprocess
+  - The `stdinInput` parameter can be null for commands that don't need stdin (behaves like regular `launchProot`)
+
+---
+
 ## [2026-01-19] - MP-004
 - **What was implemented**: Added configurable timeout support for long-running operations
 - **Files changed**:

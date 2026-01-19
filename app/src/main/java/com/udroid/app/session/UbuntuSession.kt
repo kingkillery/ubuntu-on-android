@@ -48,4 +48,22 @@ interface UbuntuSession {
      * @return Result containing ProcessResult on success, or failure with exception
      */
     suspend fun exec(command: String, timeoutSeconds: Long = 300): Result<ProcessResult>
+
+    /**
+     * Executes a command in the running session with stdin input support.
+     * This is useful for interactive commands that require input piped to them,
+     * such as REPL sessions, password prompts, or commands that read from stdin.
+     *
+     * @param command The command to execute
+     * @param stdinInput Input to pipe to the command's stdin. Can be null for no input.
+     * @param timeoutSeconds Maximum time to wait for command completion.
+     *        Use 0 or negative value to wait indefinitely (no timeout).
+     *        Default is 300 seconds (5 minutes).
+     * @return Result containing ProcessResult on success, or failure with exception
+     */
+    suspend fun execInteractive(
+        command: String,
+        stdinInput: String?,
+        timeoutSeconds: Long = 300
+    ): Result<ProcessResult>
 }

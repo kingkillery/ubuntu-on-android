@@ -64,7 +64,7 @@
         "./gradlew :app:assembleDebug succeeds"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "Needed for interactive prompts and REPL sessions"
     },
     {
