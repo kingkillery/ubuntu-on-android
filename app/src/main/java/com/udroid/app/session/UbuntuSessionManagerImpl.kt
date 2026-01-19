@@ -253,18 +253,33 @@ class UbuntuSessionImpl(
 
             _state = SessionState.Stopping
             sessionRepository.updateSessionState(id, _state.toData())
-            
-            Timber.d("Stopping session: $id")
 
-            // Kill the proot process for this session
-            nativeBridge.killProot(id, 15) // SIGTERM
-            
+            Log.d(TAG, "Stopping session: $id with child process cleanup")
+            Timber.d("Stopping session: $id with child process cleanup")
+
+            // Kill the proot process and all its children to prevent orphans.
+            // This handles services started with nohup, background jobs, etc.
+            val path = rootfsPath
+            if (path != null) {
+                nativeBridge.killProotWithChildren(
+                    sessionId = id,
+                    rootfsPath = path.absolutePath,
+                    sessionDir = path.absolutePath
+                )
+            } else {
+                // Fallback to simple kill if rootfs path is not available
+                Log.w(TAG, "Rootfs path not available, falling back to simple kill")
+                nativeBridge.killProot(id, 15) // SIGTERM
+            }
+
             _state = SessionState.Stopped
             sessionRepository.updateSessionState(id, _state.toData())
-            
+
+            Log.d(TAG, "Session stopped: $id")
             Timber.d("Session stopped: $id")
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e(TAG, "Failed to stop session: $id - ${e.message}", e)
             Timber.e(e, "Failed to stop session: $id")
             _state = SessionState.Error(e.message ?: "Unknown error")
             sessionRepository.updateSessionState(id, _state.toData())

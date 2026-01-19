@@ -340,6 +340,123 @@ class NativeBridge @Inject constructor(
         }
     }
 
+    /**
+     * Kills a proot process and all its child processes to prevent orphans.
+     *
+     * This method first attempts to kill all descendant processes spawned inside
+     * the proot environment (e.g., services started with nohup), then kills the
+     * main proot process itself.
+     *
+     * @param sessionId The session ID to kill
+     * @param rootfsPath Path to the rootfs (needed to run cleanup command inside proot)
+     * @param sessionDir Working directory for the session
+     * @return true if the process was successfully killed, false otherwise
+     */
+    suspend fun killProotWithChildren(
+        sessionId: String,
+        rootfsPath: String,
+        sessionDir: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        Log.d(TAG, "=== killProotWithChildren called for session $sessionId ===")
+        Timber.d("Killing PRoot session $sessionId with all child processes")
+
+        try {
+            // Get the main proot process first
+            val mainProcess = synchronized(processMap) { processMap[sessionId] }
+            if (mainProcess == null) {
+                Log.w(TAG, "No main process found for session $sessionId")
+                Timber.w("No main process found for session $sessionId")
+                return@withContext false
+            }
+
+            val mainPid = getProcessPid(mainProcess)
+            Log.d(TAG, "Main proot process PID: $mainPid")
+
+            // Step 1: Run a cleanup command inside a fresh proot instance to kill all
+            // processes. This catches services started with nohup, background jobs, etc.
+            // We use 'kill -9 -1' which kills all processes the user can kill (except init).
+            // Inside proot with -0 (fake root), this kills all processes in the container.
+            Log.d(TAG, "Running cleanup command inside proot to kill child processes...")
+
+            val cleanupResult = launchProot(
+                sessionId = "${sessionId}_cleanup",
+                rootfsPath = rootfsPath,
+                sessionDir = sessionDir,
+                bindMounts = emptyList(),
+                envVars = emptyMap(),
+                // Kill all processes except PID 1 (init). The -9 signal (SIGKILL) ensures
+                // processes can't ignore it. pkill -9 -P 1 kills processes with PPID 1.
+                // We also try to kill by process group in case some processes re-parented.
+                command = """
+                    # Try to kill all user processes (this is safe inside proot fake root)
+                    # First try killing all processes with PPID 1 (re-parented orphans)
+                    pkill -9 -P 1 2>/dev/null || true
+                    # Then kill all processes except ourselves and init
+                    for pid in $(ls /proc 2>/dev/null | grep -E '^[0-9]+$'); do
+                        if [ "${'$'}pid" != "1" ] && [ "${'$'}pid" != "$$" ]; then
+                            kill -9 "${'$'}pid" 2>/dev/null || true
+                        fi
+                    done
+                    # Final cleanup: try kill -1 which sends signal to all processes
+                    kill -9 -1 2>/dev/null || true
+                    echo "Cleanup complete"
+                """.trimIndent(),
+                timeoutSeconds = 5 // Short timeout since this is just cleanup
+            )
+
+            Log.d(TAG, "Cleanup result: exitCode=${cleanupResult.exitCode}, stdout=${cleanupResult.stdout.take(100)}")
+
+            // Step 2: Now kill the main proot process
+            Log.d(TAG, "Killing main proot process for session $sessionId")
+            val removed = synchronized(processMap) { processMap.remove(sessionId) }
+            if (removed != null) {
+                // First try SIGTERM to allow graceful shutdown
+                removed.destroy()
+
+                // Wait briefly for graceful shutdown
+                val exited = removed.waitFor(500, TimeUnit.MILLISECONDS)
+                if (!exited) {
+                    // Force kill if still running
+                    Log.d(TAG, "Process didn't exit gracefully, force killing...")
+                    removed.destroyForcibly()
+                    removed.waitFor(1, TimeUnit.SECONDS)
+                }
+            }
+
+            // Step 3: On Android, we can also try to kill any remaining processes by PPID
+            // using the shell (this catches processes that may have escaped proot)
+            if (mainPid > 0) {
+                Log.d(TAG, "Cleaning up any remaining child processes of PID $mainPid")
+                try {
+                    // Use Android's process killer to clean up orphans
+                    val pkillProcess = ProcessBuilder("sh", "-c",
+                        "pkill -9 -P $mainPid 2>/dev/null || true"
+                    ).start()
+                    pkillProcess.waitFor(1, TimeUnit.SECONDS)
+                    pkillProcess.destroyForcibly()
+                } catch (e: Exception) {
+                    Log.w(TAG, "pkill cleanup failed (expected on some devices): ${e.message}")
+                }
+            }
+
+            Log.d(TAG, "Session $sessionId terminated with child process cleanup")
+            Timber.d("Session $sessionId terminated with child process cleanup")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Error killing PRoot session $sessionId with children: ${e.message}", e)
+            Timber.e(e, "Error killing PRoot session $sessionId with children")
+
+            // Fallback: try simple kill
+            try {
+                val process = synchronized(processMap) { processMap.remove(sessionId) }
+                process?.destroyForcibly()
+            } catch (e2: Exception) {
+                Timber.w("Fallback kill also failed: ${e2.message}")
+            }
+            false
+        }
+    }
+
     suspend fun isProotRunning(sessionId: String): Boolean = withContext(Dispatchers.IO) {
         val process = synchronized(processMap) { processMap[sessionId] }
         process?.isAlive ?: false

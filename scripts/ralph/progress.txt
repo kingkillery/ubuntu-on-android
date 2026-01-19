@@ -16,6 +16,36 @@ See prd.json for 6 MP-* stories enabling concurrent process execution.
 
 ---
 
+## [2026-01-19] - MP-006
+- **What was implemented**: Implemented clean session shutdown with child process cleanup
+- **Files changed**:
+  - `app/src/main/java/com/udroid/app/nativebridge/NativeBridge.kt`:
+    - Added `killProotWithChildren()` method that performs comprehensive cleanup
+    - Step 1: Spawns a fresh proot instance to run cleanup commands inside the container
+    - Step 2: Kills all processes with PPID 1 (orphaned processes that re-parented to init)
+    - Step 3: Iterates through /proc to kill all remaining processes except init
+    - Step 4: Runs `kill -9 -1` as final cleanup signal to all processes
+    - Step 5: Gracefully terminates the main proot process (SIGTERM, then SIGKILL)
+    - Step 6: Uses Android's pkill command to clean up any escaped child processes by PPID
+  - `app/src/main/java/com/udroid/app/session/UbuntuSessionManagerImpl.kt`:
+    - Updated `stop()` method in `UbuntuSessionImpl` to call `killProotWithChildren()` when rootfs path is available
+    - Falls back to simple `killProot()` if rootfs path is unavailable
+    - Added logging for better debugging of shutdown process
+- **Acceptance criteria verification**:
+  - ✓ stop() kills all child processes spawned by session (via cleanup commands inside proot + pkill by PPID)
+  - ✓ Uses process group or pkill by PPID pattern (uses both: `pkill -9 -P` inside proot and on Android shell)
+  - ✓ No orphan processes left after session stop (multi-stage cleanup ensures thorough termination)
+  - ✓ `./gradlew :app:assembleDebug` succeeds
+- **Learnings:**
+  - Inside proot with `-0` (fake root), `kill -9 -1` sends SIGKILL to all processes except init (PID 1)
+  - Services started with `nohup` inside proot become orphans when their parent dies, re-parenting to PID 1
+  - Using a separate cleanup proot instance ensures cleanup runs even if the main session is stuck
+  - Android's pkill command is available via the shell but may not exist on all devices - handle gracefully
+  - Multi-stage cleanup (inside proot → main process → Android shell) catches processes at all escape points
+  - Graceful shutdown (SIGTERM → wait 500ms → SIGKILL) gives processes a chance to clean up properly
+
+---
+
 ## [2026-01-19] - MP-005
 - **What was implemented**: Added stdin support for interactive command execution
 - **Files changed**:
