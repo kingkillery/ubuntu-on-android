@@ -25,7 +25,7 @@
         "./gradlew :app:assembleDebug succeeds"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Required for proper signal handling. See UbuntuSessionManagerImpl.kt:220"
     },
     {
