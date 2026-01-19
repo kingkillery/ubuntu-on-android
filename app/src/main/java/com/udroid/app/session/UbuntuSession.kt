@@ -37,5 +37,15 @@ interface UbuntuSession {
 
     suspend fun start(): Result<Unit>
     suspend fun stop(): Result<Unit>
-    suspend fun exec(command: String, timeoutSeconds: Long = 60): Result<ProcessResult>
+
+    /**
+     * Executes a command in the running session.
+     *
+     * @param command The command to execute
+     * @param timeoutSeconds Maximum time to wait for command completion.
+     *        Use 0 or negative value to wait indefinitely (no timeout).
+     *        Default is 300 seconds (5 minutes).
+     * @return Result containing ProcessResult on success, or failure with exception
+     */
+    suspend fun exec(command: String, timeoutSeconds: Long = 300): Result<ProcessResult>
 }

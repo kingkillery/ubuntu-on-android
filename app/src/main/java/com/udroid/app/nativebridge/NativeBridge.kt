@@ -110,6 +110,19 @@ class NativeBridge @Inject constructor(
         }
     }
 
+    /**
+     * Launches a proot process for the given session.
+     *
+     * @param sessionId Unique identifier for this session
+     * @param rootfsPath Path to the rootfs directory
+     * @param sessionDir Working directory for the session
+     * @param bindMounts List of bind mount paths
+     * @param envVars Environment variables to set
+     * @param command Command to execute inside proot
+     * @param timeoutSeconds Maximum time to wait for command completion.
+     *        Use 0 or negative value to wait indefinitely (no timeout).
+     *        Default is 300 seconds (5 minutes).
+     */
     suspend fun launchProot(
         sessionId: String,
         rootfsPath: String,
@@ -117,7 +130,7 @@ class NativeBridge @Inject constructor(
         bindMounts: List<String>,
         envVars: Map<String, String>,
         command: String,
-        timeoutSeconds: Long = 30
+        timeoutSeconds: Long = 300
     ): com.udroid.app.model.ProcessResult = withContext(Dispatchers.IO) {
         Log.d(TAG, "=== launchProot called ===")
         Log.d(TAG, "sessionId=$sessionId, rootfs=$rootfsPath, command=$command, timeout=${timeoutSeconds}s")
@@ -230,19 +243,26 @@ class NativeBridge @Inject constructor(
             stdoutReader.start()
             stderrReader.start()
 
-            // Wait with timeout
-            Log.d(TAG, "Calling waitFor with timeout ${timeoutSeconds}s...")
-            val completed = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
-            Log.d(TAG, "waitFor returned: completed=$completed")
-            val exitCode = if (completed) {
-                val code = process.exitValue()
+            // Wait with timeout (0 or negative means wait indefinitely)
+            val exitCode = if (timeoutSeconds <= 0) {
+                Log.d(TAG, "Calling waitFor with no timeout (indefinite wait)...")
+                val code = process.waitFor()
                 Log.d(TAG, "Process completed with exit code: $code")
                 code
             } else {
-                Log.w(TAG, "PRoot command timed out after ${timeoutSeconds}s, killing process")
-                Timber.w("PRoot command timed out after ${timeoutSeconds}s, killing process")
-                process.destroyForcibly()
-                -1
+                Log.d(TAG, "Calling waitFor with timeout ${timeoutSeconds}s...")
+                val completed = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
+                Log.d(TAG, "waitFor returned: completed=$completed")
+                if (completed) {
+                    val code = process.exitValue()
+                    Log.d(TAG, "Process completed with exit code: $code")
+                    code
+                } else {
+                    Log.w(TAG, "PRoot command timed out after ${timeoutSeconds}s, killing process")
+                    Timber.w("PRoot command timed out after ${timeoutSeconds}s, killing process")
+                    process.destroyForcibly()
+                    -1
+                }
             }
 
             // Wait for reader threads to complete.

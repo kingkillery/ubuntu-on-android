@@ -16,6 +16,30 @@ See prd.json for 6 MP-* stories enabling concurrent process execution.
 
 ---
 
+## [2026-01-19] - MP-004
+- **What was implemented**: Added configurable timeout support for long-running operations
+- **Files changed**:
+  - `app/src/main/java/com/udroid/app/nativebridge/NativeBridge.kt`:
+    - Changed default timeout from 30s to 300s (5 minutes)
+    - Added KDoc documentation for `launchProot()` explaining timeout behavior
+    - Implemented `timeoutSeconds <= 0` handling: uses `process.waitFor()` (no timeout) instead of `process.waitFor(timeout, TimeUnit.SECONDS)`
+    - Refactored wait logic to branch based on timeout value
+  - `app/src/main/java/com/udroid/app/session/UbuntuSession.kt`:
+    - Changed default timeout from 60s to 300s (5 minutes)
+    - Added KDoc documentation for `exec()` explaining timeout behavior
+- **Acceptance criteria verification**:
+  - ✓ exec() accepts optional timeout parameter with default 300s (was 60s)
+  - ✓ launchProot respects configurable timeout (already did, now with better default)
+  - ✓ Timeout of 0 means no timeout (wait indefinitely) - implemented via `timeoutSeconds <= 0` check
+  - ✓ `./gradlew :app:assembleDebug` succeeds
+- **Learnings:**
+  - `process.waitFor()` (no args) blocks indefinitely until process exits - perfect for long-running tasks
+  - `process.waitFor(timeout, TimeUnit)` returns boolean (completed or not) and requires explicit timeout handling
+  - Using `<= 0` check allows both 0 and negative values to mean "no timeout" which is defensive
+  - The default timeout should be generous (300s) for Claude Code tasks which can run long AI operations
+
+---
+
 ## [2026-01-19] - MP-003
 - **What was implemented**: Fixed stream reader race condition in launchProot
 - **Files changed**:
