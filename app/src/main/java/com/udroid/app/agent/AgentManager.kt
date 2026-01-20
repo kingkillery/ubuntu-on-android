@@ -324,19 +324,32 @@ class AgentManager @Inject constructor(
     }
 
     /**
+     * Escape a string for safe use in single-quoted shell context.
+     * Handles single quotes by ending the quote, adding escaped quote, resuming quote.
+     * Example: "it's" becomes 'it'\''s'
+     */
+    private fun shellEscape(value: String): String {
+        // Replace ' with '\'' (end quote, escaped quote, start quote)
+        return value.replace("'", "'\\''")
+    }
+
+    /**
      * Build a command that securely sets environment variables from a temp file.
      * This avoids exposing API keys in the process list (ps aux).
      *
      * Creates a temp file with restricted permissions (600), sources it, runs the
      * command, then deletes the file - all in a single shell execution.
+     *
+     * API keys are properly shell-escaped to prevent injection attacks.
      */
     private fun buildSecureEnvCommand(config: AgentConfig?, command: String): String {
         if (config == null) return command
 
         val envLines = mutableListOf<String>()
-        config.anthropicApiKey?.let { envLines.add("export ANTHROPIC_API_KEY='$it'") }
-        config.openaiApiKey?.let { envLines.add("export OPENAI_API_KEY='$it'") }
-        config.geminiApiKey?.let { envLines.add("export GEMINI_API_KEY='$it'") }
+        // Shell-escape each API key to prevent injection via special characters
+        config.anthropicApiKey?.let { envLines.add("export ANTHROPIC_API_KEY='${shellEscape(it)}'") }
+        config.openaiApiKey?.let { envLines.add("export OPENAI_API_KEY='${shellEscape(it)}'") }
+        config.geminiApiKey?.let { envLines.add("export GEMINI_API_KEY='${shellEscape(it)}'") }
 
         if (envLines.isEmpty()) return command
 
@@ -359,14 +372,16 @@ _ENV_EOF_
      * Build environment variable prefix for agent commands.
      * @deprecated Use buildSecureEnvCommand instead to avoid API key exposure in process list
      */
+    @Suppress("unused")
     @Deprecated("Use buildSecureEnvCommand instead", ReplaceWith("buildSecureEnvCommand(config, command)"))
     private fun buildEnvPrefix(config: AgentConfig?): String {
         if (config == null) return ""
 
         val envVars = mutableListOf<String>()
-        config.anthropicApiKey?.let { envVars.add("ANTHROPIC_API_KEY='$it'") }
-        config.openaiApiKey?.let { envVars.add("OPENAI_API_KEY='$it'") }
-        config.geminiApiKey?.let { envVars.add("GEMINI_API_KEY='$it'") }
+        // Shell-escape for safety even in deprecated method
+        config.anthropicApiKey?.let { envVars.add("ANTHROPIC_API_KEY='${shellEscape(it)}'") }
+        config.openaiApiKey?.let { envVars.add("OPENAI_API_KEY='${shellEscape(it)}'") }
+        config.geminiApiKey?.let { envVars.add("GEMINI_API_KEY='${shellEscape(it)}'") }
 
         return if (envVars.isNotEmpty()) envVars.joinToString(" ") + " " else ""
     }

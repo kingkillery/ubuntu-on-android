@@ -223,26 +223,28 @@ cat > /usr/local/bin/agent-run << 'AGENT_EOF'
 VENV_DIR="/opt/agent-tools/venv"
 . "$VENV_DIR/bin/activate"
 
-TASK="$*"
-
-if [ -z "$TASK" ]; then
+if [ -z "$1" ]; then
     echo "Usage: agent-run <task_description>"
     echo "Example: agent-run 'list all files in current directory'"
     exit 1
 fi
 
-# Simple agent loop using available tools
-python3 << PYTHON_EOF
+# Pass task via command-line argument to avoid shell injection in heredoc
+# Using base64 encoding to safely pass arbitrary strings
+TASK_B64=$(printf '%s' "$*" | base64 -w 0 2>/dev/null || printf '%s' "$*" | base64)
+
+python3 -c "
 import subprocess
 import sys
-import os
+import base64
 
-task = '''$TASK'''
-print(f"[agent] Task: {task}")
-print("[agent] Executing...")
+# Decode task from base64 to avoid quote injection issues
+task = base64.b64decode('$TASK_B64').decode('utf-8')
+print(f'[agent] Task: {task}')
+print('[agent] Executing...')
 
-# For now, just execute the task as a shell command if it looks like one
-# In a full implementation, this would use an LLM to decompose tasks
+# Execute the task as a shell command
+# Note: This is intentional - agent-run is designed to execute arbitrary commands
 try:
     result = subprocess.run(task, shell=True, capture_output=True, text=True, timeout=60)
     if result.stdout:
@@ -251,12 +253,12 @@ try:
         print(result.stderr, file=sys.stderr)
     sys.exit(result.returncode)
 except subprocess.TimeoutExpired:
-    print("[agent] Task timed out after 60 seconds", file=sys.stderr)
+    print('[agent] Task timed out after 60 seconds', file=sys.stderr)
     sys.exit(124)
 except Exception as e:
-    print(f"[agent] Error: {e}", file=sys.stderr)
+    print(f'[agent] Error: {e}', file=sys.stderr)
     sys.exit(1)
-PYTHON_EOF
+"
 AGENT_EOF
 chmod +x /usr/local/bin/agent-run
 
