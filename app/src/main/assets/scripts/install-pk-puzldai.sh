@@ -45,6 +45,7 @@ apk add --no-cache \
     jq \
     bash \
     coreutils \
+    procps \
     >> "$LOG_FILE" 2>&1 || error "Failed to install base packages"
 
 # Install build dependencies for pip packages that need compilation
@@ -131,7 +132,7 @@ log "Creating wrapper script..."
 cat > /usr/local/bin/pk-puzldai << 'WRAPPER_EOF'
 #!/bin/sh
 # pk-puzldai wrapper script
-VENV_DIR="/opt/pk-puzldai/venv"
+VENV_DIR="/opt/agent-tools/venv"
 
 # Activate virtual environment
 . "$VENV_DIR/bin/activate"
@@ -219,7 +220,7 @@ cat > /usr/local/bin/agent-run << 'AGENT_EOF'
 # Agent runner - executes commands with agent orchestration
 # Usage: agent-run <task_description>
 
-VENV_DIR="/opt/pk-puzldai/venv"
+VENV_DIR="/opt/agent-tools/venv"
 . "$VENV_DIR/bin/activate"
 
 TASK="$*"

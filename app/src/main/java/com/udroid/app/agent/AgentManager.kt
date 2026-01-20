@@ -156,11 +156,9 @@ class AgentManager @Inject constructor(
         val startTime = System.currentTimeMillis()
 
         try {
-            // Build environment variables for API keys if provided
-            val envPrefix = buildEnvPrefix(config)
-
-            // Use agent-run for simple tasks
-            val command = "$envPrefix agent-run '$task'"
+            // Build command with secure environment variable injection
+            val baseCommand = "agent-run '$task'"
+            val command = buildSecureEnvCommand(config, baseCommand)
 
             val result = session.exec(command, timeoutSeconds = timeoutSeconds)
 
@@ -217,8 +215,14 @@ class AgentManager @Inject constructor(
         val startTime = System.currentTimeMillis()
 
         try {
-            val envPrefix = if (apiKey != null) "GEMINI_API_KEY='$apiKey' " else ""
-            val command = "$envPrefix gemini '$query'"
+            // Build command with secure API key injection if provided
+            val baseCommand = "gemini '$query'"
+            val command = if (apiKey != null) {
+                val config = AgentConfig(geminiApiKey = apiKey)
+                buildSecureEnvCommand(config, baseCommand)
+            } else {
+                baseCommand
+            }
 
             val result = session.exec(command, timeoutSeconds = timeoutSeconds)
 
@@ -320,8 +324,42 @@ class AgentManager @Inject constructor(
     }
 
     /**
-     * Build environment variable prefix for agent commands.
+     * Build a command that securely sets environment variables from a temp file.
+     * This avoids exposing API keys in the process list (ps aux).
+     *
+     * Creates a temp file with restricted permissions (600), sources it, runs the
+     * command, then deletes the file - all in a single shell execution.
      */
+    private fun buildSecureEnvCommand(config: AgentConfig?, command: String): String {
+        if (config == null) return command
+
+        val envLines = mutableListOf<String>()
+        config.anthropicApiKey?.let { envLines.add("export ANTHROPIC_API_KEY='$it'") }
+        config.openaiApiKey?.let { envLines.add("export OPENAI_API_KEY='$it'") }
+        config.geminiApiKey?.let { envLines.add("export GEMINI_API_KEY='$it'") }
+
+        if (envLines.isEmpty()) return command
+
+        // Create temp file, set restrictive permissions, write env vars, source it,
+        // run command, then delete - all atomically to minimize exposure window
+        val envContent = envLines.joinToString("\n")
+        return """
+            _env_file=$(mktemp /tmp/.agent_env_XXXXXX) && \
+            chmod 600 "${'$'}_env_file" && \
+            cat > "${'$'}_env_file" << '_ENV_EOF_'
+$envContent
+_ENV_EOF_
+            . "${'$'}_env_file" && \
+            rm -f "${'$'}_env_file" && \
+            $command
+        """.trimIndent().replace("\n            ", " ")
+    }
+
+    /**
+     * Build environment variable prefix for agent commands.
+     * @deprecated Use buildSecureEnvCommand instead to avoid API key exposure in process list
+     */
+    @Deprecated("Use buildSecureEnvCommand instead", ReplaceWith("buildSecureEnvCommand(config, command)"))
     private fun buildEnvPrefix(config: AgentConfig?): String {
         if (config == null) return ""
 

@@ -6,11 +6,13 @@ import androidx.lifecycle.viewModelScope
 import com.udroid.app.agent.AgentConfig
 import com.udroid.app.agent.AgentManager
 import com.udroid.app.agent.AgentTaskResult
+import com.udroid.app.model.SessionState
 import com.udroid.app.session.UbuntuSessionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -26,6 +28,7 @@ data class TaskHistoryItem(
 data class AgentTaskUiState(
     val sessionId: String = "",
     val sessionName: String = "",
+    val isSessionRunning: Boolean = false,
     val isAgentInstalled: Boolean = false,
     val isCheckingInstall: Boolean = true,
     val taskInput: String = "",
@@ -55,16 +58,31 @@ class AgentTaskViewModel @Inject constructor(
     val uiState: StateFlow<AgentTaskUiState> = _uiState.asStateFlow()
 
     init {
-        loadSession()
-        checkAgentInstallation()
+        loadSessionAndObserveState()
     }
 
-    private fun loadSession() {
+    private fun loadSessionAndObserveState() {
         viewModelScope.launch {
             val session = sessionManager.getSession(sessionId)
             if (session != null) {
                 _uiState.value = _uiState.value.copy(
                     sessionName = session.config.name
+                )
+
+                // Observe session state changes
+                session.stateFlow.collectLatest { state ->
+                    val isRunning = state is SessionState.Running
+                    _uiState.value = _uiState.value.copy(isSessionRunning = isRunning)
+
+                    // Only check agent installation when session is running
+                    if (isRunning && _uiState.value.isCheckingInstall) {
+                        checkAgentInstallation()
+                    }
+                }
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isCheckingInstall = false,
+                    errorMessage = "Session not found"
                 )
             }
         }
@@ -72,6 +90,14 @@ class AgentTaskViewModel @Inject constructor(
 
     private fun checkAgentInstallation() {
         viewModelScope.launch {
+            if (!_uiState.value.isSessionRunning) {
+                _uiState.value = _uiState.value.copy(
+                    isCheckingInstall = false,
+                    errorMessage = "Session must be running to check agent installation"
+                )
+                return@launch
+            }
+
             _uiState.value = _uiState.value.copy(isCheckingInstall = true)
             val isInstalled = agentManager.isAgentInstalled(sessionId)
             _uiState.value = _uiState.value.copy(
@@ -92,6 +118,13 @@ class AgentTaskViewModel @Inject constructor(
     fun runTask() {
         val task = _uiState.value.taskInput.trim()
         if (task.isEmpty()) return
+
+        if (!_uiState.value.isSessionRunning) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Session must be running to execute tasks"
+            )
+            return
+        }
 
         viewModelScope.launch {
             val historyItem = TaskHistoryItem(
@@ -163,6 +196,13 @@ class AgentTaskViewModel @Inject constructor(
     }
 
     fun installAgentTools() {
+        if (!_uiState.value.isSessionRunning) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Session must be running to install agent tools"
+            )
+            return
+        }
+
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isRunning = true,
