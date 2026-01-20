@@ -35,3 +35,7 @@ local.properties
 
 # Screenshots
 screen*.png
+device_screen.png
+
+# Logcat output
+logcat*.txt
