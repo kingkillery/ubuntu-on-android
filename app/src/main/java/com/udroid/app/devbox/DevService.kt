@@ -69,7 +69,18 @@ data class ServiceTemplate(
             installCommand = "apt-get update && apt-get install -y nodejs npm"
         )
 
-        val PRESETS = listOf(SSH, JUPYTER, HTTP_SERVER, NGINX, NODEJS)
+        val AGENT_TOOLS = ServiceTemplate(
+            id = "agent",
+            displayName = "AI Agent Tools",
+            description = "pk-puzldai, factory.ai droid, and Gemini CLI for AI orchestration",
+            defaultPort = 0, // No port needed for agent tools
+            startCommand = "", // Agent tools are CLI-based, not a daemon
+            healthCheck = "test -f /opt/agent-tools/venv/bin/pk-puzldai && test -f /opt/agent-tools/venv/bin/droid && test -f /opt/agent-tools/venv/bin/gemini",
+            checkCommand = "test -f /usr/local/bin/pk-puzldai",
+            installCommand = "/data/data/com.udroid.app/files/scripts/install-pk-puzldai.sh"
+        )
+
+        val PRESETS = listOf(SSH, JUPYTER, HTTP_SERVER, NGINX, NODEJS, AGENT_TOOLS)
 
         fun fromId(id: String): ServiceTemplate? =
             PRESETS.find { it.id == id }

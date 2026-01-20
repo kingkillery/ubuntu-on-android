@@ -2,6 +2,7 @@ package com.udroid.app.ui.setup
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.udroid.app.agent.AgentManager
 import com.udroid.app.model.DistroVariant
 import com.udroid.app.session.SessionConfig
 import com.udroid.app.session.UbuntuSessionManager
@@ -15,7 +16,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SetupWizardViewModel @Inject constructor(
-    private val sessionManager: UbuntuSessionManager
+    private val sessionManager: UbuntuSessionManager,
+    private val agentManager: AgentManager
 ) : ViewModel() {
 
     private val _selectedDistro = MutableStateFlow<DistroVariant>(DistroVariant.JAMMY_XFCE4)
@@ -24,8 +26,14 @@ class SetupWizardViewModel @Inject constructor(
     private val _sessionName = MutableStateFlow("Ubuntu Session")
     val sessionName: StateFlow<String> = _sessionName.asStateFlow()
 
+    private val _installAgentTools = MutableStateFlow(true)
+    val installAgentTools: StateFlow<Boolean> = _installAgentTools.asStateFlow()
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _agentInstallProgress = MutableStateFlow<String?>(null)
+    val agentInstallProgress: StateFlow<String?> = _agentInstallProgress.asStateFlow()
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
@@ -40,6 +48,10 @@ class SetupWizardViewModel @Inject constructor(
 
     fun updateSessionName(name: String) {
         _sessionName.value = name
+    }
+
+    fun toggleAgentTools() {
+        _installAgentTools.value = !_installAgentTools.value
     }
 
     fun createSession() {
@@ -63,7 +75,13 @@ class SetupWizardViewModel @Inject constructor(
                 result.fold(
                     onSuccess = { session ->
                         Timber.d("Session created: ${session.id}")
-                        _setupComplete.value = session.id
+
+                        // Start the session first if agent tools need to be installed
+                        if (_installAgentTools.value) {
+                            installAgentToolsInSession(session.id)
+                        } else {
+                            _setupComplete.value = session.id
+                        }
                     },
                     onFailure = { error ->
                         Timber.e(error, "Failed to create session")
@@ -78,5 +96,47 @@ class SetupWizardViewModel @Inject constructor(
 
     fun clearError() {
         _errorMessage.value = null
+    }
+
+    private fun installAgentToolsInSession(sessionId: String) {
+        viewModelScope.launch {
+            try {
+                _agentInstallProgress.value = "Starting session..."
+
+                // Start the session first
+                val startResult = sessionManager.startSession(sessionId)
+                if (startResult.isFailure) {
+                    _errorMessage.value = "Failed to start session: ${startResult.exceptionOrNull()?.message}"
+                    _isLoading.value = false
+                    return@launch
+                }
+
+                _agentInstallProgress.value = "Installing agent tools..."
+
+                // Install agent tools
+                val installResult = agentManager.installAgent(sessionId) { progress ->
+                    _agentInstallProgress.value = progress
+                }
+
+                installResult.fold(
+                    onSuccess = {
+                        Timber.d("Agent tools installed successfully")
+                        _agentInstallProgress.value = "Setup complete!"
+                        _setupComplete.value = sessionId
+                    },
+                    onFailure = { error ->
+                        Timber.e(error, "Failed to install agent tools")
+                        // Don't fail the whole setup, just warn
+                        _agentInstallProgress.value = "Agent tools install failed, continuing..."
+                        _setupComplete.value = sessionId
+                    }
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "Error during agent installation")
+                _setupComplete.value = sessionId
+            } finally {
+                _isLoading.value = false
+            }
+        }
     }
 }

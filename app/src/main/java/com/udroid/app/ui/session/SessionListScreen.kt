@@ -11,6 +11,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +29,8 @@ fun SessionListScreen(
     onCreateSession: () -> Unit,
     onSessionClick: (sessionId: String) -> Unit,
     onServicesClick: (sessionId: String) -> Unit,
+    onTerminalClick: (sessionId: String) -> Unit = {},
+    onAgentTaskClick: (sessionId: String) -> Unit = {},
     viewModel: SessionListViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -86,6 +90,8 @@ fun SessionListScreen(
                             onClick = { onSessionClick(session.id) },
                             onDelete = { viewModel.deleteSession(session.id) },
                             onServices = { onServicesClick(session.id) },
+                            onTerminal = { onTerminalClick(session.id) },
+                            onAgentTask = { onAgentTaskClick(session.id) },
                             onToggle = {
                                 when (sessionState) {
                                     is com.udroid.app.model.SessionState.Running -> {
@@ -121,6 +127,8 @@ fun SessionItem(
     onClick: () -> Unit,
     onDelete: () -> Unit,
     onServices: () -> Unit,
+    onTerminal: () -> Unit,
+    onAgentTask: () -> Unit,
     onToggle: () -> Unit
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -154,6 +162,34 @@ fun SessionItem(
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                // Terminal button - only enabled when running
+                IconButton(
+                    onClick = onTerminal,
+                    enabled = sessionState is com.udroid.app.model.SessionState.Running
+                ) {
+                    Icon(
+                        Icons.Default.Build,
+                        contentDescription = "Terminal",
+                        tint = if (sessionState is com.udroid.app.model.SessionState.Running)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    )
+                }
+                // Agent Task button - only enabled when running
+                IconButton(
+                    onClick = onAgentTask,
+                    enabled = sessionState is com.udroid.app.model.SessionState.Running
+                ) {
+                    Icon(
+                        Icons.Default.Star,
+                        contentDescription = "Agent Tasks",
+                        tint = if (sessionState is com.udroid.app.model.SessionState.Running)
+                            MaterialTheme.colorScheme.secondary
+                        else
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    )
+                }
                 IconButton(onClick = onServices) {
                     Icon(
                         Icons.Default.Settings,

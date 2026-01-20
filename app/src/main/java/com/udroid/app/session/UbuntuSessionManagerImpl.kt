@@ -10,6 +10,9 @@ import com.udroid.app.storage.SessionRepository
 import com.udroid.app.storage.toData
 import com.udroid.app.storage.toDomain
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
@@ -143,40 +146,45 @@ class UbuntuSessionImpl(
     initialState: SessionState = SessionState.Created
 ) : UbuntuSession {
 
-    private var _state: SessionState = initialState
+    // Use MutableStateFlow for immediate state updates to UI
+    private val _stateFlow = MutableStateFlow(initialState)
     private var vncPort: Int = 5901
     private var rootfsPath: java.io.File? = null
     private var proxyUrl: String? = null
 
-    override val state: SessionState get() = _state
+    override val state: SessionState get() = _stateFlow.value
 
     /**
      * Returns the actual OS PID of the running proot process.
      * Returns -1 if the session is not running or the PID cannot be determined.
      */
     override suspend fun getPid(): Long {
-        if (_state !is SessionState.Running) {
+        if (_stateFlow.value !is SessionState.Running) {
             return -1L
         }
         return nativeBridge.getPid(id)
     }
 
-    override val stateFlow: Flow<SessionState> =
-        sessionRepository.observeSessions()
-            .map { sessions ->
-                sessions.find { it.id == this.id }?.state?.toDomain() ?: SessionState.Created
-            }
+    override val stateFlow: StateFlow<SessionState> = _stateFlow.asStateFlow()
+
+    /**
+     * Updates internal state immediately and persists to repository.
+     * UI observers see the change instantly via stateFlow.
+     */
+    private suspend fun updateState(newState: SessionState) {
+        _stateFlow.value = newState
+        sessionRepository.updateSessionState(id, newState.toData())
+    }
 
     override suspend fun start(): Result<Unit> {
         return try {
             Log.d(TAG, "=== UbuntuSessionImpl.start() called for session: $id ===")
-            if (_state is SessionState.Running) {
+            if (_stateFlow.value is SessionState.Running) {
                 Log.d(TAG, "Session already running, returning failure")
                 return Result.failure(IllegalStateException("Session already running"))
             }
 
-            _state = SessionState.Starting
-            sessionRepository.updateSessionState(id, _state.toData())
+            updateState(SessionState.Starting)
 
             Log.d(TAG, "Starting session: $id with distro ${config.distro.id}")
             Timber.d("Starting session: $id with distro ${config.distro.id}")
@@ -263,8 +271,7 @@ class UbuntuSessionImpl(
 
             vncPort = 5901
 
-            _state = SessionState.Running(vncPort)
-            sessionRepository.updateSessionState(id, _state.toData())
+            updateState(SessionState.Running(vncPort))
 
             Log.d(TAG, "Session started successfully: $id")
             Timber.d("Session started successfully: $id")
@@ -272,20 +279,18 @@ class UbuntuSessionImpl(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start session: $id - ${e.message}", e)
             Timber.e(e, "Failed to start session: $id")
-            _state = SessionState.Error(e.message ?: "Unknown error")
-            sessionRepository.updateSessionState(id, _state.toData())
+            updateState(SessionState.Error(e.message ?: "Unknown error"))
             Result.failure(e)
         }
     }
 
     override suspend fun stop(): Result<Unit> {
         return try {
-            if (_state !is SessionState.Running) {
+            if (_stateFlow.value !is SessionState.Running) {
                 return Result.failure(IllegalStateException("Session not running"))
             }
 
-            _state = SessionState.Stopping
-            sessionRepository.updateSessionState(id, _state.toData())
+            updateState(SessionState.Stopping)
 
             Log.d(TAG, "Stopping session: $id with child process cleanup")
             Timber.d("Stopping session: $id with child process cleanup")
@@ -312,8 +317,7 @@ class UbuntuSessionImpl(
                 proxyUrl = null
             }
 
-            _state = SessionState.Stopped
-            sessionRepository.updateSessionState(id, _state.toData())
+            updateState(SessionState.Stopped)
 
             Log.d(TAG, "Session stopped: $id")
             Timber.d("Session stopped: $id")
@@ -321,8 +325,7 @@ class UbuntuSessionImpl(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to stop session: $id - ${e.message}", e)
             Timber.e(e, "Failed to stop session: $id")
-            _state = SessionState.Error(e.message ?: "Unknown error")
-            sessionRepository.updateSessionState(id, _state.toData())
+            updateState(SessionState.Error(e.message ?: "Unknown error"))
             Result.failure(e)
         }
     }
@@ -351,7 +354,7 @@ class UbuntuSessionImpl(
 
     override suspend fun exec(command: String, timeoutSeconds: Long): Result<ProcessResult> {
         return try {
-            if (_state !is SessionState.Running) {
+            if (_stateFlow.value !is SessionState.Running) {
                 return Result.failure(IllegalStateException("Session not running"))
             }
 
@@ -383,7 +386,7 @@ class UbuntuSessionImpl(
         timeoutSeconds: Long
     ): Result<ProcessResult> {
         return try {
-            if (_state !is SessionState.Running) {
+            if (_stateFlow.value !is SessionState.Running) {
                 return Result.failure(IllegalStateException("Session not running"))
             }
 
