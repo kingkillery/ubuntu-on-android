@@ -5,6 +5,7 @@ import com.udroid.app.model.DesktopEnvironment
 import com.udroid.app.model.ProcessResult
 import com.udroid.app.model.SessionState
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 
 data class SessionConfig(
     val name: String,
@@ -27,7 +28,7 @@ interface UbuntuSession {
     val id: String
     val config: SessionConfig
     val state: SessionState
-    val stateFlow: Flow<SessionState>
+    val stateFlow: StateFlow<SessionState>
 
     /**
      * Returns the actual OS PID of the running proot process.

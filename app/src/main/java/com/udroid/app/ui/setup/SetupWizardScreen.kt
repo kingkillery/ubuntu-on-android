@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,7 +29,9 @@ fun SetupWizardScreen(
 ) {
     val selectedDistro by viewModel.selectedDistro.collectAsState()
     val sessionName by viewModel.sessionName.collectAsState()
+    val installAgentTools by viewModel.installAgentTools.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val agentInstallProgress by viewModel.agentInstallProgress.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val setupComplete by viewModel.setupComplete.collectAsState()
 
@@ -108,9 +111,43 @@ fun SetupWizardScreen(
             }
 
             item {
+                Divider()
+            }
+
+            item {
+                Text(
+                    text = "Agent Tools",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            item {
+                AgentToolsOption(
+                    isEnabled = installAgentTools,
+                    onToggle = { viewModel.toggleAgentTools() }
+                )
+            }
+
+            item {
+                Divider()
+            }
+
+            item {
                 if (isLoading) {
-                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                         CircularProgressIndicator()
+                        agentInstallProgress?.let { progress ->
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = progress,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 } else {
                     Button(
@@ -165,6 +202,61 @@ fun DistroItem(
                 text = "${distro.sizeBytes / (1024 * 1024 * 1024)} GB",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun AgentToolsOption(
+    isEnabled: Boolean,
+    onToggle: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle),
+        border = if (isEnabled) {
+            BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+        } else {
+            null
+        }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Star,
+                contentDescription = null,
+                tint = if (isEnabled) MaterialTheme.colorScheme.primary
+                       else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(40.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Install Agent Tools",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = if (isEnabled) FontWeight.Bold else FontWeight.Normal
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "pk-puzldai, factory.ai droid, Google Gemini CLI",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Enables AI-powered task orchestration",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = isEnabled,
+                onCheckedChange = { onToggle() }
             )
         }
     }

@@ -23,6 +23,8 @@ import com.udroid.app.ui.desktop.DesktopScreen
 import com.udroid.app.ui.session.SessionListScreen
 import com.udroid.app.ui.services.ServicesScreen
 import com.udroid.app.ui.setup.SetupWizardScreen
+import com.udroid.app.ui.terminal.TerminalScreen
+import com.udroid.app.ui.agent.AgentTaskScreen
 import com.udroid.app.ui.theme.UdroidTheme
 import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
@@ -135,6 +137,12 @@ fun AppNavigation(
                 },
                 onServicesClick = { sessionId ->
                     navController.navigate("services/$sessionId")
+                },
+                onTerminalClick = { sessionId ->
+                    navController.navigate("terminal/$sessionId")
+                },
+                onAgentTaskClick = { sessionId ->
+                    navController.navigate("agent_task/$sessionId")
                 }
             )
         }
@@ -169,6 +177,32 @@ fun AppNavigation(
         ) { backStackEntry ->
             val sessionId = backStackEntry.arguments?.getString("sessionId") ?: return@composable
             ServicesScreen(
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(
+            route = "terminal/{sessionId}",
+            arguments = listOf(navArgument("sessionId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val sessionId = backStackEntry.arguments?.getString("sessionId") ?: return@composable
+            TerminalScreen(
+                sessionId = sessionId,
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(
+            route = "agent_task/{sessionId}",
+            arguments = listOf(navArgument("sessionId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val sessionId = backStackEntry.arguments?.getString("sessionId") ?: return@composable
+            AgentTaskScreen(
+                sessionId = sessionId,
                 onBack = {
                     navController.popBackStack()
                 }

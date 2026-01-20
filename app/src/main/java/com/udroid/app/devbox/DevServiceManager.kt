@@ -327,6 +327,7 @@ class DevServiceManager @Inject constructor(
             "http" -> "python3 -m http.server $port --bind $bindAddr"
             "nginx" -> "sed -i 's/listen\\s\\+[0-9]\\+/listen $port/' /etc/nginx/sites-enabled/default && nginx -g 'daemon off;' -c /etc/nginx/nginx.conf"
             "nodejs" -> "npx --yes http-server -p $port -a $bindAddr"
+            "agent" -> "echo 'Agent tools installed and ready'" // Not a daemon, just CLI tools
             else -> template.startCommand
         }
     }
@@ -338,6 +339,7 @@ class DevServiceManager @Inject constructor(
             "http" -> "pkill -f 'python3 -m http.server'"
             "nginx" -> "pkill -f nginx"
             "nodejs" -> "pkill -f node"
+            "agent" -> "echo 'Agent tools are CLI-based, no daemon to stop'" // Not a daemon
             else -> "pkill -f ${template.id}" // Fallback?
         }
     }
