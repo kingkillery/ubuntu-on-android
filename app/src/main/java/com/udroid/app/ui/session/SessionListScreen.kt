@@ -79,13 +79,15 @@ fun SessionListScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(sessions, key = { it.id }) { session ->
+                        val sessionState by session.stateFlow.collectAsState(initial = session.state)
                         SessionItem(
                             session = session,
+                            sessionState = sessionState,
                             onClick = { onSessionClick(session.id) },
                             onDelete = { viewModel.deleteSession(session.id) },
                             onServices = { onServicesClick(session.id) },
                             onToggle = {
-                                when (session.state) {
+                                when (sessionState) {
                                     is com.udroid.app.model.SessionState.Running -> {
                                         viewModel.stopSession(session.id)
                                     }
@@ -115,6 +117,7 @@ fun SessionListScreen(
 @Composable
 fun SessionItem(
     session: com.udroid.app.session.UbuntuSession,
+    sessionState: com.udroid.app.model.SessionState,
     onClick: () -> Unit,
     onDelete: () -> Unit,
     onServices: () -> Unit,
@@ -147,7 +150,7 @@ fun SessionItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                SessionStateBadge(state = session.state)
+                SessionStateBadge(state = sessionState)
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -159,12 +162,12 @@ fun SessionItem(
                 }
                 IconButton(onClick = onToggle) {
                     Icon(
-                        if (session.state is com.udroid.app.model.SessionState.Running) {
+                        if (sessionState is com.udroid.app.model.SessionState.Running) {
                             Icons.Default.Close
                         } else {
                             Icons.Filled.PlayArrow
                         },
-                        contentDescription = if (session.state is com.udroid.app.model.SessionState.Running) {
+                        contentDescription = if (sessionState is com.udroid.app.model.SessionState.Running) {
                             "Stop"
                         } else {
                             "Start"

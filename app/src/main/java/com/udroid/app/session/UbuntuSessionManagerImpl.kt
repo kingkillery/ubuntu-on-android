@@ -3,6 +3,7 @@ package com.udroid.app.session
 import com.udroid.app.model.ProcessResult
 import com.udroid.app.model.SessionState
 import com.udroid.app.nativebridge.NativeBridge
+import com.udroid.app.proxy.ProxyManager
 import com.udroid.app.rootfs.RootfsManager
 import com.udroid.app.storage.SessionInfo
 import com.udroid.app.storage.SessionRepository
@@ -24,7 +25,8 @@ private const val TAG = "UbuntuSessionManager"
 class UbuntuSessionManagerImpl @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val nativeBridge: NativeBridge,
-    private val rootfsManager: RootfsManager
+    private val rootfsManager: RootfsManager,
+    private val proxyManager: ProxyManager
 ) : UbuntuSessionManager {
 
     override suspend fun createSession(config: SessionConfig): Result<UbuntuSession> {
@@ -44,7 +46,8 @@ class UbuntuSessionManagerImpl @Inject constructor(
                 config = config,
                 sessionRepository = sessionRepository,
                 nativeBridge = nativeBridge,
-                rootfsManager = rootfsManager
+                rootfsManager = rootfsManager,
+                proxyManager = proxyManager
             )
 
             Timber.d("Created session: $sessionId (${config.name})")
@@ -63,7 +66,9 @@ class UbuntuSessionManagerImpl @Inject constructor(
                     config = info.toConfig(),
                     sessionRepository = sessionRepository,
                     nativeBridge = nativeBridge,
-                    rootfsManager = rootfsManager
+                    rootfsManager = rootfsManager,
+                    proxyManager = proxyManager,
+                    initialState = info.state.toDomain()
                 )
             }
         }
@@ -76,7 +81,9 @@ class UbuntuSessionManagerImpl @Inject constructor(
             config = sessionInfo.toConfig(),
             sessionRepository = sessionRepository,
             nativeBridge = nativeBridge,
-            rootfsManager = rootfsManager
+            rootfsManager = rootfsManager,
+            proxyManager = proxyManager,
+            initialState = sessionInfo.state.toDomain()
         )
     }
 
@@ -131,12 +138,15 @@ class UbuntuSessionImpl(
     override val config: SessionConfig,
     private val sessionRepository: SessionRepository,
     private val nativeBridge: NativeBridge,
-    private val rootfsManager: RootfsManager
+    private val rootfsManager: RootfsManager,
+    private val proxyManager: ProxyManager,
+    initialState: SessionState = SessionState.Created
 ) : UbuntuSession {
 
-    private var _state: SessionState = SessionState.Created
+    private var _state: SessionState = initialState
     private var vncPort: Int = 5901
     private var rootfsPath: java.io.File? = null
+    private var proxyUrl: String? = null
 
     override val state: SessionState get() = _state
 
@@ -200,21 +210,44 @@ class UbuntuSessionImpl(
             Log.d(TAG, "Using rootfs at: ${rootfsPath!!.absolutePath}")
             Timber.d("Using rootfs at: ${rootfsPath!!.absolutePath}")
 
+            // Start proxy for network access
+            Log.d(TAG, "Acquiring proxy for network access...")
+            proxyUrl = proxyManager.acquire()
+            if (proxyUrl != null) {
+                Log.d(TAG, "Proxy acquired: $proxyUrl")
+                Timber.d("Proxy acquired: $proxyUrl")
+            } else {
+                Log.w(TAG, "Failed to acquire proxy, continuing without network proxy")
+                Timber.w("Failed to acquire proxy, continuing without network proxy")
+            }
+
+            // Build environment variables including proxy settings
+            val envVars = mutableMapOf(
+                "HOME" to "/root",
+                "USER" to "root",
+                "TERM" to "xterm-256color",
+                "TMPDIR" to rootfsManager.getTempDir().absolutePath
+            )
+            proxyUrl?.let { proxy ->
+                envVars["HTTP_PROXY"] = proxy
+                envVars["http_proxy"] = proxy
+                envVars["HTTPS_PROXY"] = proxy
+                envVars["https_proxy"] = proxy
+                envVars["NO_PROXY"] = "localhost,127.0.0.1"
+                envVars["no_proxy"] = "localhost,127.0.0.1"
+            }
+
             // Verify proot works with a quick test command
-            Log.d(TAG, "Testing proot environment with 10s timeout...")
+            Log.d(TAG, "Testing proot environment with 20s timeout...")
             Timber.d("Testing proot environment...")
             val testResult = nativeBridge.launchProot(
                 sessionId = id,
                 rootfsPath = rootfsPath!!.absolutePath,
                 sessionDir = rootfsPath!!.absolutePath,
                 bindMounts = emptyList(),
-                envVars = mapOf(
-                    "HOME" to "/root",
-                    "USER" to "root",
-                    "TERM" to "xterm-256color"
-                ),
-                command = "echo 'PRoot OK' && cat /etc/os-release | head -1 || echo 'Alpine Linux'",
-                timeoutSeconds = 10
+                envVars = envVars,
+                command = "echo 'PRoot OK' && cat /etc/os-release | head -1 || echo 'Alpine Linux' && echo 'HTTP_PROXY=' \$HTTP_PROXY && echo 'Testing network...' && curl -s --max-time 5 -x \$HTTP_PROXY http://httpbin.org/ip 2>&1 | head -5 || echo 'Network test failed'",
+                timeoutSeconds = 20
             )
 
             Log.d(TAG, "PRoot test result: exitCode=${testResult.exitCode}, stdout=${testResult.stdout.take(100)}, stderr=${testResult.stderr.take(100)}")
@@ -272,6 +305,13 @@ class UbuntuSessionImpl(
                 nativeBridge.killProot(id, 15) // SIGTERM
             }
 
+            // Release proxy reference
+            if (proxyUrl != null) {
+                Log.d(TAG, "Releasing proxy reference")
+                proxyManager.release()
+                proxyUrl = null
+            }
+
             _state = SessionState.Stopped
             sessionRepository.updateSessionState(id, _state.toData())
 
@@ -285,6 +325,28 @@ class UbuntuSessionImpl(
             sessionRepository.updateSessionState(id, _state.toData())
             Result.failure(e)
         }
+    }
+
+    /**
+     * Build environment variables map including proxy settings if available.
+     */
+    private fun buildEnvVars(): Map<String, String> {
+        val env = mutableMapOf(
+            "HOME" to "/home/udroid",
+            "USER" to "udroid",
+            "TERM" to "xterm-256color",
+            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            "TMPDIR" to rootfsManager.getTempDir().absolutePath
+        )
+        proxyUrl?.let { proxy ->
+            env["HTTP_PROXY"] = proxy
+            env["http_proxy"] = proxy
+            env["HTTPS_PROXY"] = proxy
+            env["https_proxy"] = proxy
+            env["NO_PROXY"] = "localhost,127.0.0.1"
+            env["no_proxy"] = "localhost,127.0.0.1"
+        }
+        return env
     }
 
     override suspend fun exec(command: String, timeoutSeconds: Long): Result<ProcessResult> {
@@ -302,12 +364,7 @@ class UbuntuSessionImpl(
                 rootfsPath = path.absolutePath,
                 sessionDir = path.absolutePath,
                 bindMounts = emptyList(),
-                envVars = mapOf(
-                    "HOME" to "/home/udroid",
-                    "USER" to "udroid",
-                    "TERM" to "xterm-256color",
-                    "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-                ),
+                envVars = buildEnvVars(),
                 command = command,
                 timeoutSeconds = timeoutSeconds
             )
@@ -339,12 +396,7 @@ class UbuntuSessionImpl(
                 rootfsPath = path.absolutePath,
                 sessionDir = path.absolutePath,
                 bindMounts = emptyList(),
-                envVars = mapOf(
-                    "HOME" to "/home/udroid",
-                    "USER" to "udroid",
-                    "TERM" to "xterm-256color",
-                    "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-                ),
+                envVars = buildEnvVars(),
                 command = command,
                 stdinInput = stdinInput,
                 timeoutSeconds = timeoutSeconds

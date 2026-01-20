@@ -184,7 +184,10 @@ class NativeBridge @Inject constructor(
                     put("TERM", "xterm-256color")
                     put("LANG", "C.UTF-8")
                     put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
-                    envVars.forEach { (k, v) -> put(k, v) }
+                    envVars.forEach { (k, v) ->
+                        put(k, v)
+                        Log.d(TAG, "Setting env: $k=$v")
+                    }
                 }
 
                 directory(File(sessionDir))

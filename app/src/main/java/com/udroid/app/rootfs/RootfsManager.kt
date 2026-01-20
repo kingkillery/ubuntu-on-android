@@ -65,6 +65,12 @@ class RootfsManager @Inject constructor(
         return File(cacheDir, filename)
     }
 
+    fun getTempDir(): File {
+        val tempDir = File(context.cacheDir, "tmp")
+        tempDir.mkdirs()
+        return tempDir
+    }
+
     suspend fun verifyChecksum(file: File, expectedSha256: String): Boolean {
         return withContext(Dispatchers.IO) {
             try {
