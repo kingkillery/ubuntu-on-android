@@ -39,3 +39,22 @@ device_screen.png
 
 # Logcat output
 logcat*.txt
+
+# Android Generic
+captures/
+.externalNativeBuild/
+.cxx/
+*.hprof
+*.ap_
+*.apk
+*.dex
+/build/
+
+# Kotlin / JetBrains
+.kotlin/
+*.class
+
+# Windows / System
+Thumbs.db
+ehthumbs.db
+Desktop.ini
