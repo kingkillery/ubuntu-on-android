@@ -1,5 +1,6 @@
 package com.udroid.app.ui.agent
 
+
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -50,7 +51,8 @@ data class AgentTaskUiState(
 enum class AgentTool(val displayName: String, val description: String) {
     AGENT_RUN("Agent Run", "Run tasks with AI orchestration"),
     GEMINI("Gemini", "Query Google Gemini for answers"),
-    DROID("Droid", "factory.ai droid CLI commands")
+    DROID("Droid", "factory.ai droid CLI commands"),
+    BROWSER("Browser", "Live automated browser view")
 }
 
 @HiltViewModel
@@ -64,6 +66,10 @@ class AgentTaskViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(AgentTaskUiState(sessionId = sessionId))
     val uiState: StateFlow<AgentTaskUiState> = _uiState.asStateFlow()
+
+    // Browser state
+    private val _browserUrl = MutableStateFlow("http://localhost:3000")
+    val browserUrl = _browserUrl.asStateFlow()
 
     init {
         loadSessionAndObserveState()
@@ -152,6 +158,13 @@ class AgentTaskViewModel @Inject constructor(
                     AgentTool.AGENT_RUN -> agentManager.runAgentTask(sessionId, task)
                     AgentTool.GEMINI -> agentManager.runGeminiQuery(sessionId, task)
                     AgentTool.DROID -> agentManager.runDroidCommand(sessionId, task)
+                    AgentTool.BROWSER -> {
+                        startBrowserServer()
+                        AgentTaskResult(
+                            success = true,
+                            output = "Browser Server Started. Check the View."
+                        )
+                    }
                 }
 
                 val updatedItem = historyItem.copy(
@@ -297,4 +310,70 @@ class AgentTaskViewModel @Inject constructor(
     }
 
     fun getAllPresets(): List<PresetTask> = PresetTasks.tasks
+
+    fun sendBrowserControl(action: String, payload: String) {
+        viewModelScope.launch {
+            try {
+                // TODO: Implement actual API call to http://localhost:3000/control
+                Timber.d("Browser Control: $action - $payload")
+                
+                // TODO: If action is "START_SERVER", use sessionManager.exec() to launch node script
+                if (action == "START_SERVER") {
+                   startBrowserServer()
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Browser control failed")
+            }
+        }
+    }
+
+    private suspend fun startBrowserServer() {
+        val scriptContent = """
+            const express = require('express');
+            const puppeteer = require('puppeteer');
+            const app = express();
+            let browser, page;
+
+            app.get('/screenshot', async (req, res) => {
+                if (!page) {
+                    browser = await puppeteer.launch({
+                        args: ['--no-sandbox', '--disable-setuid-sandbox']
+                    });
+                    page = await browser.newPage();
+                    await page.goto('https://www.google.com'); 
+                }
+                const buffer = await page.screenshot();
+                res.type('image/png').send(buffer);
+            });
+
+            app.post('/control', express.json(), async (req, res) => {
+                // TODO: Implement controls
+                res.send('OK');
+            });
+            
+            app.get('/status', (req, res) => res.send('RUNNING'));
+
+            app.listen(3000, () => console.log('Browser Agent listening on 3000'));
+        """.trimIndent()
+        
+        // Escape for echo
+        val escapedScript = scriptContent.replace("'", "'\\''")
+
+        viewModelScope.launch {
+            val session = sessionManager.getSession(sessionId) ?: return@launch
+            
+            // 1. Write Script
+            Timber.d("Deploying browser script...")
+            session.exec("echo '$escapedScript' > agent_browser_server.js")
+            
+            // 2. Install Dependencies (if not exists)
+            Timber.d("Checking dependencies...")
+            // Simple check or just try install
+            session.exec("npm install express puppeteer")
+
+            // 3. Start Server
+            Timber.d("Starting Node server...")
+            session.exec("nohup node agent_browser_server.js > browser.log 2>&1 &")
+        }
+    }
 }

@@ -139,7 +139,10 @@ fun AgentTaskScreen(
                                     listState = listState,
                                     onTaskInputChange = { viewModel.updateTaskInput(it) },
                                     onSelectTool = { viewModel.selectTool(it) },
-                                    onRunTask = { viewModel.runTask() }
+                                    onRunTask = { viewModel.runTask() },
+                                    onBrowserControl = { action, payload -> 
+                                        viewModel.sendBrowserControl(action, payload) 
+                                    }
                                 )
                             }
                         }
@@ -449,7 +452,8 @@ fun AdvancedModeContent(
     listState: androidx.compose.foundation.lazy.LazyListState,
     onTaskInputChange: (String) -> Unit,
     onSelectTool: (AgentTool) -> Unit,
-    onRunTask: () -> Unit
+    onRunTask: () -> Unit,
+    onBrowserControl: (String, String) -> Unit = { _, _ -> }
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // Tool selector
@@ -468,108 +472,122 @@ fun AdvancedModeContent(
             }
         }
 
-        // Output area
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .padding(horizontal = 16.dp)
-        ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xFF1E1E1E))
-                    .padding(8.dp),
-                reverseLayout = true
-            ) {
-                if (uiState.currentOutput.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = uiState.currentOutput,
-                            style = TextStyle(
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 13.sp,
-                                color = Color(0xFFD4D4D4)
-                            )
-                        )
-                    }
-                } else {
-                    item {
-                        Text(
-                            text = "Enter a task below and press Run",
-                            style = TextStyle(
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 13.sp,
-                                color = Color(0xFF808080)
-                            )
-                        )
-                    }
-                }
-            }
-        }
-
-        // Input area
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                BasicTextField(
-                    value = uiState.taskInput,
-                    onValueChange = onTaskInputChange,
-                    enabled = !uiState.isRunning,
-                    textStyle = TextStyle(
-                        fontSize = 16.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = { onRunTask() }),
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 8.dp),
-                    decorationBox = { innerTextField ->
-                        Box {
-                            if (uiState.taskInput.isEmpty()) {
-                                Text(
-                                    text = when (uiState.selectedTool) {
-                                        AgentTool.AGENT_RUN -> "Describe a task to run..."
-                                        AgentTool.GEMINI -> "Ask Gemini a question..."
-                                        AgentTool.DROID -> "Enter a droid command..."
-                                    },
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+        // Content Area
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            if (uiState.selectedTool == AgentTool.BROWSER) {
+                AgentBrowserView(
+                    serverUrl = "http://localhost:3000",
+                    onControlAction = onBrowserControl
+                )
+            } else {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Output area
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0xFF1E1E1E))
+                                .padding(8.dp),
+                            reverseLayout = true
+                        ) {
+                            if (uiState.currentOutput.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        text = uiState.currentOutput,
+                                        style = TextStyle(
+                                            fontFamily = FontFamily.Monospace,
+                                            fontSize = 13.sp,
+                                            color = Color(0xFFD4D4D4)
+                                        )
+                                    )
+                                }
+                            } else {
+                                item {
+                                    Text(
+                                        text = "Enter a task below and press Run",
+                                        style = TextStyle(
+                                            fontFamily = FontFamily.Monospace,
+                                            fontSize = 13.sp,
+                                            color = Color(0xFF808080)
+                                        )
+                                    )
+                                }
                             }
-                            innerTextField()
                         }
                     }
-                )
 
-                if (uiState.isRunning) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    IconButton(
-                        onClick = onRunTask,
-                        enabled = uiState.taskInput.isNotBlank()
+                    // Input area
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
                     ) {
-                        Icon(
-                            Icons.Filled.Send,
-                            contentDescription = "Run Task",
-                            tint = if (uiState.taskInput.isNotBlank())
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            BasicTextField(
+                                value = uiState.taskInput,
+                                onValueChange = onTaskInputChange,
+                                enabled = !uiState.isRunning,
+                                textStyle = TextStyle(
+                                    fontSize = 16.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                ),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                keyboardActions = KeyboardActions(onSend = { onRunTask() }),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = 8.dp),
+                                decorationBox = { innerTextField ->
+                                    Box {
+                                        if (uiState.taskInput.isEmpty()) {
+                                            Text(
+                                                text = when (uiState.selectedTool) {
+                                                    AgentTool.AGENT_RUN -> "Describe a task to run..."
+                                                    AgentTool.GEMINI -> "Ask Gemini a question..."
+                                                    AgentTool.DROID -> "Enter a droid command..."
+//                                                    AgentTool.BROWSER -> "Browser control..."
+                                                    else -> "Describe a task..."
+                                                },
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                }
+                            )
+
+                            if (uiState.isRunning) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                IconButton(
+                                    onClick = onRunTask,
+                                    enabled = uiState.taskInput.isNotBlank()
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Send,
+                                        contentDescription = "Run Task",
+                                        tint = if (uiState.taskInput.isNotBlank())
+                                            MaterialTheme.colorScheme.primary
+                                        else
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

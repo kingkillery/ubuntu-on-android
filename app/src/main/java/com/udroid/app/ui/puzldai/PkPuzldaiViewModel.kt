@@ -138,7 +138,7 @@ class PkPuzldaiViewModel @Inject constructor(
                 val result = session.exec("test -f /home/udroid/.pk-puzldai-installed && echo 'yes' || echo 'no'")
                 result.fold(
                     onSuccess = { processResult ->
-                        val isInstalled = processResult.output.trim() == "yes"
+                        val isInstalled = processResult.stdout.trim() == "yes"
                         _uiState.value = _uiState.value.copy(
                             isPuzldaiInstalled = isInstalled,
                             isCheckingInstall = false
@@ -172,7 +172,7 @@ class PkPuzldaiViewModel @Inject constructor(
                     val result = session.exec("test -n \"\$$envVar\" && echo 'yes' || echo 'no'")
                     result.fold(
                         onSuccess = { processResult ->
-                            agent.copy(ready = processResult.output.trim() == "yes")
+                            agent.copy(ready = processResult.stdout.trim() == "yes")
                         },
                         onFailure = { agent }
                     )
@@ -181,7 +181,7 @@ class PkPuzldaiViewModel @Inject constructor(
                     val result = session.exec("command -v ollama >/dev/null 2>&1 && echo 'yes' || echo 'no'")
                     result.fold(
                         onSuccess = { processResult ->
-                            agent.copy(ready = processResult.output.trim() == "yes")
+                            agent.copy(ready = processResult.stdout.trim() == "yes")
                         },
                         onFailure = { agent }
                     )
@@ -262,14 +262,14 @@ class PkPuzldaiViewModel @Inject constructor(
 
                 result.fold(
                     onSuccess = { processResult ->
-                        val output = processResult.output.trim()
+                        val output = processResult.stdout.trim()
                         if (output.isNotEmpty()) {
                             addAssistantMessage(
                                 content = output,
                                 agent = _uiState.value.currentAgent
                             )
                         }
-                        if (processResult.exitCode != 0 && processResult.output.isEmpty()) {
+                        if (processResult.exitCode != 0 && processResult.stdout.isEmpty()) {
                             addErrorMessage("Command failed with exit code ${processResult.exitCode}")
                         }
                     },

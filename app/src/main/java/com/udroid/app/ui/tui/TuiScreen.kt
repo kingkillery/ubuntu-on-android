@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
  * TuiScreen - Main container composable for TUI-style views.
@@ -238,7 +239,7 @@ fun TuiEmptyScreen(
             text = title,
             color = TuiColors.White,
             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-            fontSize = androidx.compose.ui.unit.sp.coerceAtMost(18.sp, 18.sp)
+            fontSize = 18.sp
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -247,7 +248,7 @@ fun TuiEmptyScreen(
             text = message,
             color = TuiColors.ForegroundDim,
             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-            fontSize = androidx.compose.ui.unit.sp.coerceAtMost(14.sp, 14.sp)
+            fontSize = 14.sp
         )
 
         if (action != null) {
@@ -257,8 +258,5 @@ fun TuiEmptyScreen(
     }
 }
 
-// Extension to coerce TextUnit
-private fun androidx.compose.ui.unit.TextUnit.sp.Companion.coerceAtMost(
-    value: androidx.compose.ui.unit.TextUnit,
-    max: androidx.compose.ui.unit.TextUnit
-): androidx.compose.ui.unit.TextUnit = value
+// Extension removed
+
