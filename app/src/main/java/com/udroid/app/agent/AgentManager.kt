@@ -55,7 +55,7 @@ class AgentManager @Inject constructor(
 
     /**
      * Install agent tools in a session.
-     * Copies the bootstrap script from assets and executes it.
+     * Copies the bundled pk-puzldai build and bootstrap script from assets, then executes it.
      *
      * @param sessionId The session to install in
      * @param onProgress Callback for installation progress updates
@@ -94,6 +94,10 @@ class AgentManager @Inject constructor(
             // Make it executable
             session.exec("chmod +x /tmp/install-agent.sh", timeoutSeconds = 10)
 
+            // Copy bundled pk-puzldai files if available
+            onProgress("Copying bundled pk-puzldai...")
+            copyBundledPuzldai(session)
+
             onProgress("Running installation (this may take a few minutes)...")
 
             // Execute the install script with a long timeout
@@ -126,6 +130,48 @@ class AgentManager @Inject constructor(
             onProgress("Installation failed: ${e.message}")
             updateStatus(sessionId, AgentInstallStatus.Failed(e.message ?: "Unknown error"))
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Copy bundled pk-puzldai files from assets to the session.
+     * The install script will use these instead of downloading from npm.
+     */
+    private suspend fun copyBundledPuzldai(session: com.udroid.app.session.UbuntuSession) {
+        try {
+            // Create bundle directory
+            session.exec("mkdir -p /tmp/pk-puzldai-bundle", timeoutSeconds = 10)
+
+            // Copy index.js (the main CLI bundle)
+            val indexJs = readAssetFile("pk-puzldai/index.js")
+            if (indexJs.isNotEmpty()) {
+                // Use base64 encoding to safely transfer binary/large JS content
+                val base64Content = android.util.Base64.encodeToString(
+                    indexJs.toByteArray(Charsets.UTF_8),
+                    android.util.Base64.NO_WRAP
+                )
+                session.exec(
+                    "echo '$base64Content' | base64 -d > /tmp/pk-puzldai-bundle/index.js",
+                    timeoutSeconds = 60
+                )
+                Timber.d("Copied bundled pk-puzldai index.js (${indexJs.length} bytes)")
+            }
+
+            // Copy package.json
+            val packageJson = readAssetFile("pk-puzldai/package.json")
+            if (packageJson.isNotEmpty()) {
+                val base64Content = android.util.Base64.encodeToString(
+                    packageJson.toByteArray(Charsets.UTF_8),
+                    android.util.Base64.NO_WRAP
+                )
+                session.exec(
+                    "echo '$base64Content' | base64 -d > /tmp/pk-puzldai-bundle/package.json",
+                    timeoutSeconds = 30
+                )
+                Timber.d("Copied bundled pk-puzldai package.json")
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to copy bundled pk-puzldai, will fall back to npm install")
         }
     }
 

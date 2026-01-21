@@ -2,6 +2,8 @@
 # Agent tools installation script for Alpine Linux (proot environment)
 # This script installs pk-puzldai (Node.js CLI), and dependencies for agent orchestration
 # Updated for Node.js-based pk-puzldai TUI
+#
+# Priority: Bundled local build > npm registry > GitHub
 
 set -e
 
@@ -9,6 +11,7 @@ INSTALL_DIR="/opt/pk-puzldai"
 NODE_VERSION="20"
 MARKER_FILE="/home/udroid/.pk-puzldai-installed"
 LOG_FILE="/tmp/pk-puzldai-install.log"
+BUNDLED_DIR="/tmp/pk-puzldai-bundle"  # Where Android app copies bundled files
 
 log() {
     echo "[pk-puzldai] $1" | tee -a "$LOG_FILE"
@@ -68,27 +71,79 @@ mkdir -p "$INSTALL_DIR/global"
 log "Configuring npm global directory..."
 npm config set prefix "$INSTALL_DIR/global" >> "$LOG_FILE" 2>&1
 
-# Install pk-puzldai globally
-log "Installing pk-puzldai npm package..."
-if npm install -g pk-puzldai >> "$LOG_FILE" 2>&1; then
-    log "Installed pk-puzldai from npm registry"
-else
-    log "npm registry install failed, trying GitHub..."
+# Install pk-puzldai - check for bundled version first
+log "Installing pk-puzldai..."
+
+PUZLDAI_INSTALLED=false
+
+# Priority 1: Use bundled local build (from Android assets)
+if [ -f "$BUNDLED_DIR/index.js" ]; then
+    log "Found bundled pk-puzldai, installing from local build..."
+
+    # Create package directory structure
+    PACKAGE_DIR="$INSTALL_DIR/global/lib/node_modules/pk-puzldai"
+    mkdir -p "$PACKAGE_DIR/dist/cli"
+
+    # Copy bundled files
+    cp "$BUNDLED_DIR/index.js" "$PACKAGE_DIR/dist/cli/index.js"
+    chmod +x "$PACKAGE_DIR/dist/cli/index.js"
+
+    # Copy package.json if available
+    if [ -f "$BUNDLED_DIR/package.json" ]; then
+        cp "$BUNDLED_DIR/package.json" "$PACKAGE_DIR/package.json"
+        PUZLDAI_VERSION=$(cat "$BUNDLED_DIR/package.json" | grep '"version"' | head -1 | sed 's/.*"version": *"\([^"]*\)".*/\1/')
+        log "Bundled version: $PUZLDAI_VERSION"
+    else
+        # Create minimal package.json
+        cat > "$PACKAGE_DIR/package.json" << 'PKGJSON_EOF'
+{
+  "name": "pk-puzldai",
+  "version": "0.3.0-bundled",
+  "bin": {
+    "pk-puzldai": "dist/cli/index.js"
+  }
+}
+PKGJSON_EOF
+    fi
+
+    # Create bin symlink
+    mkdir -p "$INSTALL_DIR/global/bin"
+    ln -sf "$PACKAGE_DIR/dist/cli/index.js" "$INSTALL_DIR/global/bin/pk-puzldai"
+
+    log "Installed pk-puzldai from bundled local build"
+    PUZLDAI_INSTALLED=true
+fi
+
+# Priority 2: Try npm registry
+if [ "$PUZLDAI_INSTALLED" = false ]; then
+    log "No bundled version found, trying npm registry..."
+    if npm install -g pk-puzldai >> "$LOG_FILE" 2>&1; then
+        log "Installed pk-puzldai from npm registry"
+        PUZLDAI_INSTALLED=true
+    fi
+fi
+
+# Priority 3: Try GitHub
+if [ "$PUZLDAI_INSTALLED" = false ]; then
+    log "npm registry failed, trying GitHub..."
     if npm install -g github:kingkillery/Puzld.ai >> "$LOG_FILE" 2>&1; then
         log "Installed pk-puzldai from GitHub"
-    else
-        log "GitHub install failed, trying local build..."
-        # Create minimal wrapper as fallback
-        cat > "$INSTALL_DIR/pk-puzldai-fallback.js" << 'FALLBACK_EOF'
+        PUZLDAI_INSTALLED=true
+    fi
+fi
+
+# Fallback: Create error wrapper
+if [ "$PUZLDAI_INSTALLED" = false ]; then
+    log "All installation methods failed, creating fallback wrapper..."
+    cat > "$INSTALL_DIR/pk-puzldai-fallback.js" << 'FALLBACK_EOF'
 #!/usr/bin/env node
 console.log('pk-puzldai TUI');
 console.log('Installation incomplete - please install manually:');
 console.log('  npm install -g pk-puzldai');
 process.exit(1);
 FALLBACK_EOF
-        chmod +x "$INSTALL_DIR/pk-puzldai-fallback.js"
-        log "Created fallback wrapper - manual install required"
-    fi
+    chmod +x "$INSTALL_DIR/pk-puzldai-fallback.js"
+    log "Created fallback wrapper - manual install required"
 fi
 
 # Install additional useful tools
