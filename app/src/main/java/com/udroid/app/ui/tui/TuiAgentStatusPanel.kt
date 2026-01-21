@@ -1,7 +1,9 @@
 package com.udroid.app.ui.tui
+import androidx.compose.material3.MaterialTheme
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -57,7 +59,7 @@ private fun FullAgentPanel(
 ) {
     Column(
         modifier = modifier
-            .background(TuiColors.Background)
+            .background(MaterialTheme.colorScheme.background)
             .padding(4.dp)
     ) {
         // Panel header
@@ -67,7 +69,7 @@ private fun FullAgentPanel(
         ) {
             Text(
                 text = title,
-                color = TuiColors.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp
@@ -98,7 +100,7 @@ private fun AgentStatusRow(
         // Status bullet
         Text(
             text = if (agent.ready) TuiBoxChars.BULLET_FILLED else TuiBoxChars.BULLET_EMPTY,
-            color = if (agent.ready) TuiColors.AgentReady else TuiColors.AgentOff,
+            color = if (agent.ready) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -108,7 +110,7 @@ private fun AgentStatusRow(
         // Agent name
         Text(
             text = agent.name.padEnd(8),
-            color = TuiColors.Foreground,
+            color = MaterialTheme.colorScheme.onBackground,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -116,7 +118,7 @@ private fun AgentStatusRow(
         // Status text
         Text(
             text = if (agent.ready) "ready" else "off",
-            color = if (agent.ready) TuiColors.AgentReady else TuiColors.ForegroundDim,
+            color = if (agent.ready) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackgroundDim,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -130,7 +132,7 @@ private fun CompactAgentPanel(
 ) {
     Row(
         modifier = modifier
-            .background(TuiColors.Surface)
+            .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -152,14 +154,14 @@ private fun CompactAgentIndicator(
     ) {
         Text(
             text = if (agent.ready) TuiBoxChars.BULLET_FILLED else TuiBoxChars.BULLET_EMPTY,
-            color = if (agent.ready) TuiColors.AgentReady else TuiColors.AgentOff,
+            color = if (agent.ready) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
             fontFamily = FontFamily.Monospace,
             fontSize = 10.sp
         )
         Spacer(modifier = Modifier.width(2.dp))
         Text(
             text = agent.name.take(3), // Abbreviated name
-            color = if (agent.ready) TuiColors.Foreground else TuiColors.ForegroundDim,
+            color = if (agent.ready) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackgroundDim,
             fontFamily = FontFamily.Monospace,
             fontSize = 10.sp
         )
@@ -178,14 +180,14 @@ fun TuiAgentSelector(
 ) {
     Row(
         modifier = modifier
-            .background(TuiColors.Surface)
+            .background(MaterialTheme.colorScheme.surface)
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
             text = "Agent:",
-            color = TuiColors.ForegroundDim,
+            color = MaterialTheme.colorScheme.onBackgroundDim,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -194,7 +196,7 @@ fun TuiAgentSelector(
             val isSelected = agent.name == selectedAgent
             Text(
                 text = "[${if (isSelected) "x" else " "}] ${agent.name}",
-                color = if (isSelected) TuiColors.Info else TuiColors.Foreground,
+                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(horizontal = 4.dp)
@@ -220,16 +222,16 @@ fun TuiAgentHealthSummary(
     ) {
         Text(
             text = "Agents: ",
-            color = TuiColors.ForegroundDim,
+            color = MaterialTheme.colorScheme.onBackgroundDim,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
         Text(
             text = "$readyCount/$totalCount ready",
             color = when {
-                readyCount == 0 -> TuiColors.Error
-                readyCount < totalCount -> TuiColors.Warning
-                else -> TuiColors.Success
+                readyCount == 0 -> MaterialTheme.colorScheme.error
+                readyCount < totalCount -> androidx.compose.ui.graphics.Color(0xFFDCDCAA)
+                else -> androidx.compose.ui.graphics.Color(0xFF4EC9B0)
             },
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp

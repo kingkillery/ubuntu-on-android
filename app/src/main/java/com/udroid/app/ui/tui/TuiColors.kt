@@ -1,49 +1,14 @@
 package com.udroid.app.ui.tui
 
+import androidx.compose.material3.MaterialTheme
+
 import androidx.compose.ui.graphics.Color
 
 /**
  * TUI Color scheme matching PK-Puzld.ai terminal aesthetic.
  * Derived from Puzld.ai Banner.tsx colors.
  */
-object TuiColors {
-    // Primary brand colors
-    val Red = Color(0xFFFC3855)          // PK-Puzld accent color (#fc3855)
-    val White = Color(0xFFFFFFFF)        // Primary text
-    val Gray = Color(0xFF808080)         // Secondary text, borders
-    val DimGray = Color(0xFF666666)      // Dimmed/muted text
-
-    // Terminal background colors
-    val Background = Color(0xFF1E1E1E)   // Terminal dark background
-    val Surface = Color(0xFF252526)      // Slightly lighter surface
-    val SurfaceVariant = Color(0xFF2D2D30) // Card/panel backgrounds
-
-    // Text colors
-    val Foreground = Color(0xFFD4D4D4)   // Primary terminal text
-    val ForegroundDim = Color(0xFF808080) // Dimmed text
-    val ForegroundMuted = Color(0xFF5A5A5A) // Very muted text
-
-    // Semantic colors
-    val Success = Color(0xFF4EC9B0)      // Green for success/ready
-    val Warning = Color(0xFFDCDCAA)      // Yellow for warnings
-    val Error = Color(0xFFF44747)        // Red for errors
-    val Info = Color(0xFF569CD6)         // Blue for info
-
-    // Agent status colors
-    val AgentReady = Color(0xFF4EC9B0)   // Green circle for ready
-    val AgentOff = Color(0xFF5A5A5A)     // Gray circle for off
-
-    // Message role colors
-    val UserMessage = Color(0xFF569CD6)  // Blue for user input
-    val AssistantMessage = Color(0xFFD4D4D4) // Default for assistant
-    val SystemMessage = Color(0xFFDCDCAA) // Yellow for system
-    val ErrorMessage = Color(0xFFF44747) // Red for errors
-
-    // Border colors
-    val Border = Color(0xFF3C3C3C)       // Standard border
-    val BorderFocused = Color(0xFF569CD6) // Focused input border
-    val BorderAccent = Color(0xFFFC3855) // Accent border (red)
-}
+// TuiColors object removed - Use MaterialTheme.colorScheme instead
 
 /**
  * Box drawing characters for TUI borders (Unicode rounded corners).

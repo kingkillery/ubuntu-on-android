@@ -1,7 +1,9 @@
 package com.udroid.app.ui.tui
+import androidx.compose.material3.MaterialTheme
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -56,14 +58,14 @@ private fun MinimalBanner(
     ) {
         Text(
             text = "PK-Puzld",
-            color = TuiColors.White,
+            color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Monospace,
             fontSize = 14.sp
         )
         Text(
             text = " v$version",
-            color = TuiColors.ForegroundDim,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontFamily = FontFamily.Monospace,
             fontSize = 14.sp
         )
@@ -92,7 +94,7 @@ private fun FullBanner(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(TuiColors.Background)
+            .background(MaterialTheme.colorScheme.background)
             .padding(bottom = 8.dp)
     ) {
         // Top border with version tag
@@ -132,26 +134,26 @@ private fun TopBorderWithTitle(version: String) {
     ) {
         Text(
             text = "${TuiBoxChars.TOP_LEFT}${TuiBoxChars.HORIZONTAL.repeat(3)} ",
-            color = TuiColors.Gray,
+            color = MaterialTheme.colorScheme.outline,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
         Text(
             text = "PK-Puzld",
-            color = TuiColors.Red,
+            color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
         Text(
             text = " v$version ",
-            color = TuiColors.ForegroundDim,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
         Text(
             text = "${TuiBoxChars.HORIZONTAL.repeat(40)}${TuiBoxChars.TOP_RIGHT}",
-            color = TuiColors.Gray,
+            color = MaterialTheme.colorScheme.outline,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -163,14 +165,14 @@ private fun BorderedEmptyLine() {
     Row(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = TuiBoxChars.VERTICAL,
-            color = TuiColors.Gray,
+            color = MaterialTheme.colorScheme.outline,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
         Spacer(modifier = Modifier.weight(1f))
         Text(
             text = TuiBoxChars.VERTICAL,
-            color = TuiColors.Gray,
+            color = MaterialTheme.colorScheme.outline,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -207,7 +209,7 @@ private fun AsciiLogo() {
             ) {
                 Text(
                     text = TuiBoxChars.VERTICAL,
-                    color = TuiColors.Gray,
+                    color = MaterialTheme.colorScheme.outline,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp
                 )
@@ -215,7 +217,7 @@ private fun AsciiLogo() {
                 // PK part (white)
                 Text(
                     text = pkLines.getOrElse(i) { " ".repeat(12) },
-                    color = TuiColors.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp
@@ -228,7 +230,7 @@ private fun AsciiLogo() {
                 // puzld part (red)
                 Text(
                     text = puzldLines.getOrElse(i) { "" },
-                    color = TuiColors.Red,
+                    color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp
@@ -236,7 +238,7 @@ private fun AsciiLogo() {
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
                     text = TuiBoxChars.VERTICAL,
-                    color = TuiColors.Gray,
+                    color = MaterialTheme.colorScheme.outline,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp
                 )
@@ -250,13 +252,13 @@ private fun VersionSubtitle(version: String) {
     Row(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = TuiBoxChars.VERTICAL,
-            color = TuiColors.Gray,
+            color = MaterialTheme.colorScheme.outline,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
         Text(
             text = TuiTypography.center("v$version - Multi-LLM Orchestrator", 70),
-            color = TuiColors.ForegroundDim,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
             modifier = Modifier.weight(1f),
@@ -264,7 +266,7 @@ private fun VersionSubtitle(version: String) {
         )
         Text(
             text = TuiBoxChars.VERTICAL,
-            color = TuiColors.Gray,
+            color = MaterialTheme.colorScheme.outline,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -275,7 +277,7 @@ private fun VersionSubtitle(version: String) {
 private fun MiddleDivider() {
     Text(
         text = "${TuiBoxChars.LEFT_T}${TuiBoxChars.HORIZONTAL.repeat(50)}${TuiBoxChars.TOP_T}${TuiBoxChars.HORIZONTAL.repeat(20)}${TuiBoxChars.RIGHT_T}",
-        color = TuiColors.Gray,
+        color = MaterialTheme.colorScheme.outline,
         fontFamily = FontFamily.Monospace,
         fontSize = 12.sp
     )
@@ -286,33 +288,33 @@ private fun PanelHeaders() {
     Row(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = TuiBoxChars.VERTICAL,
-            color = TuiColors.Gray,
+            color = MaterialTheme.colorScheme.outline,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
         Text(
             text = TuiTypography.padEnd(" Quick start", 50),
-            color = TuiColors.White,
+            color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
         Text(
             text = TuiBoxChars.VERTICAL,
-            color = TuiColors.Gray,
+            color = MaterialTheme.colorScheme.outline,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
         Text(
             text = TuiTypography.center("Status", 20),
-            color = TuiColors.White,
+            color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
         Text(
             text = TuiBoxChars.VERTICAL,
-            color = TuiColors.Gray,
+            color = MaterialTheme.colorScheme.outline,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -353,19 +355,19 @@ private fun QuickStartRow(
     Row(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = TuiBoxChars.VERTICAL,
-            color = TuiColors.Gray,
+            color = MaterialTheme.colorScheme.outline,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
         Text(
             text = TuiTypography.padEnd(leftContent, 50),
-            color = TuiColors.ForegroundDim,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
         Text(
             text = TuiBoxChars.VERTICAL,
-            color = TuiColors.Gray,
+            color = MaterialTheme.colorScheme.outline,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -380,7 +382,7 @@ private fun QuickStartRow(
         }
         Text(
             text = TuiBoxChars.VERTICAL,
-            color = TuiColors.Gray,
+            color = MaterialTheme.colorScheme.outline,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -395,7 +397,7 @@ private fun AgentStatusCell(agent: AgentStatus, width: Int) {
 
     Text(
         text = TuiTypography.center(displayText.trim(), width),
-        color = if (agent.ready) TuiColors.AgentReady else TuiColors.ForegroundDim,
+        color = if (agent.ready) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
         fontFamily = FontFamily.Monospace,
         fontSize = 12.sp
     )
@@ -405,7 +407,7 @@ private fun AgentStatusCell(agent: AgentStatus, width: Int) {
 private fun BottomBorder() {
     Text(
         text = "${TuiBoxChars.BOTTOM_LEFT}${TuiBoxChars.HORIZONTAL.repeat(50)}${TuiBoxChars.BOTTOM_T}${TuiBoxChars.HORIZONTAL.repeat(20)}${TuiBoxChars.BOTTOM_RIGHT}",
-        color = TuiColors.Gray,
+        color = MaterialTheme.colorScheme.outline,
         fontFamily = FontFamily.Monospace,
         fontSize = 12.sp
     )
@@ -420,7 +422,7 @@ fun TuiWelcomeMessage(
 ) {
     Text(
         text = "Type a message or use /help for commands",
-        color = TuiColors.ForegroundDim,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         fontFamily = FontFamily.Monospace,
         fontSize = 12.sp,
         modifier = modifier.padding(bottom = 8.dp)

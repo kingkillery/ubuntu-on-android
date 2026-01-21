@@ -1,4 +1,5 @@
 package com.udroid.app.ui.tui
+import androidx.compose.material3.MaterialTheme
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -88,14 +89,14 @@ private fun UserMessageBubble(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = "> ",
-                color = TuiColors.UserMessage,
+                color = MaterialTheme.colorScheme.primary,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
                 text = content,
-                color = TuiColors.UserMessage,
+                color = MaterialTheme.colorScheme.primary,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 14.sp
             )
@@ -125,14 +126,14 @@ private fun AssistantMessageBubble(
             ) {
                 Text(
                     text = TuiBoxChars.BULLET_FILLED,
-                    color = TuiColors.AgentReady,
+                    color = MaterialTheme.colorScheme.primary,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 10.sp
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = agent,
-                    color = TuiColors.ForegroundDim,
+                    color = MaterialTheme.colorScheme.onBackgroundDim,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 10.sp
                 )
@@ -143,7 +144,7 @@ private fun AssistantMessageBubble(
                     if (tokens != null) {
                         Text(
                             text = "${TuiTypography.formatTokens(tokens)} tokens",
-                            color = TuiColors.ForegroundMuted,
+                            color = MaterialTheme.colorScheme.onBackgroundMuted,
                             fontFamily = FontFamily.Monospace,
                             fontSize = 10.sp
                         )
@@ -152,7 +153,7 @@ private fun AssistantMessageBubble(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "${duration}ms",
-                            color = TuiColors.ForegroundMuted,
+                            color = MaterialTheme.colorScheme.onBackgroundMuted,
                             fontFamily = FontFamily.Monospace,
                             fontSize = 10.sp
                         )
@@ -164,7 +165,7 @@ private fun AssistantMessageBubble(
         // Message content
         Text(
             text = content,
-            color = TuiColors.AssistantMessage,
+            color = MaterialTheme.colorScheme.onSurface,
             fontFamily = FontFamily.Monospace,
             fontSize = 14.sp,
             modifier = Modifier.padding(start = if (agent != null) 14.dp else 0.dp)
@@ -185,14 +186,14 @@ private fun SystemMessageBubble(
     ) {
         Text(
             text = "[system] ",
-            color = TuiColors.SystemMessage,
+            color = MaterialTheme.colorScheme.secondary,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold
         )
         Text(
             text = content,
-            color = TuiColors.SystemMessage,
+            color = MaterialTheme.colorScheme.secondary,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -208,20 +209,20 @@ private fun ErrorMessageBubble(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(4.dp))
-            .background(TuiColors.Error.copy(alpha = 0.1f))
+            .background(MaterialTheme.colorScheme.error.copy(alpha = 0.1f))
             .padding(8.dp),
         verticalAlignment = Alignment.Top
     ) {
         Text(
             text = "error: ",
-            color = TuiColors.ErrorMessage,
+            color = MaterialTheme.colorScheme.errorMessage,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold
         )
         Text(
             text = content,
-            color = TuiColors.ErrorMessage,
+            color = MaterialTheme.colorScheme.errorMessage,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -245,21 +246,21 @@ fun TuiLoadingBubble(
     ) {
         Text(
             text = TuiBoxChars.BULLET_FILLED,
-            color = TuiColors.Info,
+            color = MaterialTheme.colorScheme.primary,
             fontFamily = FontFamily.Monospace,
             fontSize = 10.sp
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = agent,
-            color = TuiColors.ForegroundDim,
+            color = MaterialTheme.colorScheme.onBackgroundDim,
             fontFamily = FontFamily.Monospace,
             fontSize = 10.sp
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = text,
-            color = TuiColors.Info,
+            color = MaterialTheme.colorScheme.primary,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -278,19 +279,19 @@ fun TuiToolActivity(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(TuiColors.Surface)
+            .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = "[$status] ",
-            color = TuiColors.Warning,
+            color = androidx.compose.ui.graphics.Color(0xFFDCDCAA),
             fontFamily = FontFamily.Monospace,
             fontSize = 10.sp
         )
         Text(
             text = toolName,
-            color = TuiColors.Foreground,
+            color = MaterialTheme.colorScheme.onBackground,
             fontFamily = FontFamily.Monospace,
             fontSize = 10.sp
         )

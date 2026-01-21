@@ -1,4 +1,5 @@
 package com.udroid.app.ui.tui
+import androidx.compose.material3.MaterialTheme
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -59,12 +60,12 @@ fun TuiInputBox(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(TuiColors.Background)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // Top border
         Text(
             text = TuiBoxChars.topBorder(72),
-            color = TuiColors.Border,
+            color = MaterialTheme.colorScheme.outline,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -78,7 +79,7 @@ fun TuiInputBox(
         ) {
             Text(
                 text = TuiBoxChars.VERTICAL,
-                color = TuiColors.Border,
+                color = MaterialTheme.colorScheme.outline,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp
             )
@@ -88,7 +89,7 @@ fun TuiInputBox(
             // Prompt
             Text(
                 text = prompt,
-                color = TuiColors.Info,
+                color = MaterialTheme.colorScheme.primary,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 14.sp
             )
@@ -104,11 +105,11 @@ fun TuiInputBox(
                     enabled = enabled,
                     singleLine = true,
                     textStyle = TextStyle(
-                        color = TuiColors.Foreground,
+                        color = MaterialTheme.colorScheme.onBackground,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 14.sp
                     ),
-                    cursorBrush = SolidColor(TuiColors.Info),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     keyboardOptions = KeyboardOptions(
                         imeAction = ImeAction.Send
                     ),
@@ -166,7 +167,7 @@ fun TuiInputBox(
                 if (value.isEmpty()) {
                     Text(
                         text = placeholder,
-                        color = TuiColors.ForegroundMuted,
+                        color = MaterialTheme.colorScheme.onBackgroundMuted,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 14.sp
                     )
@@ -177,7 +178,7 @@ fun TuiInputBox(
 
             Text(
                 text = TuiBoxChars.VERTICAL,
-                color = TuiColors.Border,
+                color = MaterialTheme.colorScheme.outline,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp
             )
@@ -186,7 +187,7 @@ fun TuiInputBox(
         // Bottom border
         Text(
             text = TuiBoxChars.bottomBorder(72),
-            color = TuiColors.Border,
+            color = MaterialTheme.colorScheme.outline,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -214,13 +215,13 @@ fun TuiInputBoxCompact(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(TuiColors.Surface)
+            .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = prompt,
-            color = TuiColors.Info,
+            color = MaterialTheme.colorScheme.primary,
             fontFamily = FontFamily.Monospace,
             fontSize = 14.sp
         )
@@ -232,11 +233,11 @@ fun TuiInputBoxCompact(
                 enabled = enabled,
                 singleLine = true,
                 textStyle = TextStyle(
-                    color = TuiColors.Foreground,
+                    color = MaterialTheme.colorScheme.onBackground,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 14.sp
                 ),
-                cursorBrush = SolidColor(TuiColors.Info),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 keyboardOptions = KeyboardOptions(
                     imeAction = ImeAction.Send
                 ),
@@ -253,7 +254,7 @@ fun TuiInputBoxCompact(
             if (value.isEmpty()) {
                 Text(
                     text = placeholder,
-                    color = TuiColors.ForegroundMuted,
+                    color = MaterialTheme.colorScheme.onBackgroundMuted,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 14.sp
                 )

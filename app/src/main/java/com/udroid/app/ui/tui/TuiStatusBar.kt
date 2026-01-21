@@ -1,5 +1,7 @@
 package com.udroid.app.ui.tui
 
+import androidx.compose.material3.MaterialTheme
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
@@ -45,12 +47,12 @@ fun TuiStatusBar(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(TuiColors.Background)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // Top border
         Text(
             text = TuiBoxChars.topBorder(72),
-            color = TuiColors.Gray,
+            color = MaterialTheme.colorScheme.outline,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -64,7 +66,7 @@ fun TuiStatusBar(
         ) {
             Text(
                 text = TuiBoxChars.VERTICAL,
-                color = TuiColors.Gray,
+                color = MaterialTheme.colorScheme.outline,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp
             )
@@ -97,7 +99,7 @@ fun TuiStatusBar(
 
             Text(
                 text = TuiBoxChars.VERTICAL,
-                color = TuiColors.Gray,
+                color = MaterialTheme.colorScheme.outline,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp
             )
@@ -106,7 +108,7 @@ fun TuiStatusBar(
         // Bottom border
         Text(
             text = TuiBoxChars.bottomBorder(72),
-            color = TuiColors.Gray,
+            color = MaterialTheme.colorScheme.outline,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -118,14 +120,14 @@ private fun AgentIndicator(agentName: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = TuiBoxChars.BULLET_FILLED,
-            color = TuiColors.AgentReady,
+            color = MaterialTheme.colorScheme.primary,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = agentName,
-            color = TuiColors.Foreground,
+            color = MaterialTheme.colorScheme.onBackground,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -137,14 +139,14 @@ private fun MessageCountIndicator(count: Int) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = "msgs:",
-            color = TuiColors.ForegroundDim,
+            color = MaterialTheme.colorScheme.onBackgroundDim,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = count.toString(),
-            color = TuiColors.Foreground,
+            color = MaterialTheme.colorScheme.onBackground,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -156,14 +158,14 @@ private fun TokenCountIndicator(count: Int) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = "tokens:",
-            color = TuiColors.ForegroundDim,
+            color = MaterialTheme.colorScheme.onBackgroundDim,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = TuiTypography.formatTokens(count),
-            color = TuiColors.Foreground,
+            color = MaterialTheme.colorScheme.onBackground,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -176,14 +178,14 @@ private fun LoadingIndicator(text: String) {
         // Animated spinner could be added here
         Text(
             text = "...",
-            color = TuiColors.Info,
+            color = MaterialTheme.colorScheme.primary,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = text,
-            color = TuiColors.Info,
+            color = MaterialTheme.colorScheme.primary,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -193,10 +195,10 @@ private fun LoadingIndicator(text: String) {
 @Composable
 private fun McpStatusIndicator(status: McpStatus) {
     val (text, color) = when (status) {
-        McpStatus.LOCAL -> "local" to TuiColors.ForegroundDim
-        McpStatus.CONNECTED -> "mcp" to TuiColors.Success
-        McpStatus.CONNECTING -> "connecting..." to TuiColors.Warning
-        McpStatus.ERROR -> "mcp error" to TuiColors.Error
+        McpStatus.LOCAL -> "local" to MaterialTheme.colorScheme.onBackgroundDim
+        McpStatus.CONNECTED -> "mcp" to androidx.compose.ui.graphics.Color(0xFF4EC9B0)
+        McpStatus.CONNECTING -> "connecting..." to androidx.compose.ui.graphics.Color(0xFFDCDCAA)
+        McpStatus.ERROR -> "mcp error" to MaterialTheme.colorScheme.error
     }
 
     Text(
@@ -219,20 +221,20 @@ fun TuiStatusBarCompact(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(TuiColors.Surface)
+            .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = TuiBoxChars.BULLET_FILLED,
-            color = TuiColors.AgentReady,
+            color = MaterialTheme.colorScheme.primary,
             fontFamily = FontFamily.Monospace,
             fontSize = 10.sp
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = agentName,
-            color = TuiColors.Foreground,
+            color = MaterialTheme.colorScheme.onBackground,
             fontFamily = FontFamily.Monospace,
             fontSize = 10.sp
         )
@@ -240,7 +242,7 @@ fun TuiStatusBarCompact(
         if (isLoading) {
             Text(
                 text = "...",
-                color = TuiColors.Info,
+                color = MaterialTheme.colorScheme.primary,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 10.sp
             )

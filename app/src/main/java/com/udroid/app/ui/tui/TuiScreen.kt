@@ -1,4 +1,5 @@
 package com.udroid.app.ui.tui
+import androidx.compose.material3.MaterialTheme
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -70,7 +71,7 @@ fun TuiScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(TuiColors.Background)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // Banner (full or minimal)
         if (showBanner) {
@@ -225,7 +226,7 @@ fun TuiEmptyScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(TuiColors.Background)
+            .background(MaterialTheme.colorScheme.background)
             .padding(16.dp)
     ) {
         TuiBanner(
@@ -237,7 +238,7 @@ fun TuiEmptyScreen(
 
         androidx.compose.material3.Text(
             text = title,
-            color = TuiColors.White,
+            color = MaterialTheme.colorScheme.onBackground,
             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
             fontSize = 18.sp
         )
@@ -246,7 +247,7 @@ fun TuiEmptyScreen(
 
         androidx.compose.material3.Text(
             text = message,
-            color = TuiColors.ForegroundDim,
+            color = MaterialTheme.colorScheme.onBackgroundDim,
             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
             fontSize = 14.sp
         )

@@ -1,4 +1,5 @@
 package com.udroid.app.ui.tui
+import androidx.compose.material3.MaterialTheme
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -80,7 +81,7 @@ fun TuiQuickStart(
         // Header
         Text(
             text = "Quick start:",
-            color = TuiColors.ForegroundDim,
+            color = MaterialTheme.colorScheme.onBackgroundDim,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
             modifier = Modifier.padding(bottom = 8.dp)
@@ -118,14 +119,14 @@ private fun QuickCommandRow(
             )
             Text(
                 text = command.command,
-                color = TuiColors.Info,
+                color = MaterialTheme.colorScheme.primary,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp
             )
             if (showDescription) {
                 Text(
                     text = " - ${command.description}",
-                    color = TuiColors.ForegroundDim,
+                    color = MaterialTheme.colorScheme.onBackgroundDim,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp
                 )
@@ -136,7 +137,7 @@ private fun QuickCommandRow(
         if (command.example != null && showDescription) {
             Text(
                 text = "    ${command.example}",
-                color = TuiColors.ForegroundMuted,
+                color = MaterialTheme.colorScheme.onBackgroundMuted,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 10.sp,
                 modifier = Modifier.padding(top = 2.dp)
@@ -164,7 +165,7 @@ fun TuiQuickStartCompact(
         commands.forEach { cmd ->
             Text(
                 text = cmd.command,
-                color = TuiColors.Info,
+                color = MaterialTheme.colorScheme.primary,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp,
                 modifier = Modifier
@@ -221,7 +222,7 @@ fun TuiHelpPanel(
     ) {
         Text(
             text = "Available Commands:",
-            color = TuiColors.White,
+            color = MaterialTheme.colorScheme.onBackground,
             fontFamily = FontFamily.Monospace,
             fontSize = 14.sp,
             modifier = Modifier.padding(bottom = 8.dp)
@@ -229,7 +230,7 @@ fun TuiHelpPanel(
 
         Text(
             text = TuiBoxChars.horizontalLine(60),
-            color = TuiColors.Border,
+            color = MaterialTheme.colorScheme.outline,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp
         )
@@ -242,13 +243,13 @@ fun TuiHelpPanel(
             ) {
                 Text(
                     text = TuiTypography.padEnd(cmd.command, 30),
-                    color = TuiColors.Info,
+                    color = MaterialTheme.colorScheme.primary,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp
                 )
                 Text(
                     text = cmd.description,
-                    color = TuiColors.ForegroundDim,
+                    color = MaterialTheme.colorScheme.onBackgroundDim,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp
                 )
