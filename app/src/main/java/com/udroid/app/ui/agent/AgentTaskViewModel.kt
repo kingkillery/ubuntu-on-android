@@ -8,6 +8,10 @@ import com.udroid.app.agent.AgentManager
 import com.udroid.app.agent.AgentTaskResult
 import com.udroid.app.model.SessionState
 import com.udroid.app.session.UbuntuSessionManager
+import com.udroid.app.ui.agent.AgentMode
+import com.udroid.app.ui.agent.PresetCategory
+import com.udroid.app.ui.agent.PresetTask
+import com.udroid.app.ui.agent.PresetTasks
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,7 +40,11 @@ data class AgentTaskUiState(
     val currentOutput: String = "",
     val taskHistory: List<TaskHistoryItem> = emptyList(),
     val errorMessage: String? = null,
-    val selectedTool: AgentTool = AgentTool.AGENT_RUN
+    val selectedTool: AgentTool = AgentTool.AGENT_RUN,
+    // New fields for Basic/Advanced mode
+    val mode: AgentMode = AgentMode.BASIC,
+    val selectedCategory: PresetCategory? = null,
+    val selectedPreset: PresetTask? = null
 )
 
 enum class AgentTool(val displayName: String, val description: String) {
@@ -239,4 +247,54 @@ class AgentTaskViewModel @Inject constructor(
     fun clearOutput() {
         _uiState.value = _uiState.value.copy(currentOutput = "")
     }
+
+    // Basic/Advanced Mode methods
+    fun switchMode(mode: AgentMode) {
+        _uiState.value = _uiState.value.copy(mode = mode)
+        // Reset selections when switching modes
+        if (mode == AgentMode.BASIC) {
+            _uiState.value = _uiState.value.copy(
+                selectedTool = AgentTool.AGENT_RUN,
+                selectedPreset = null
+            )
+        }
+    }
+
+    fun selectCategory(category: PresetCategory) {
+        _uiState.value = _uiState.value.copy(
+            selectedCategory = category,
+            selectedPreset = null,
+            taskInput = ""
+        )
+    }
+
+    fun selectPreset(preset: PresetTask) {
+        _uiState.value = _uiState.value.copy(
+            selectedPreset = preset,
+            taskInput = preset.templatePrompt
+        )
+    }
+
+    fun runPresetTask() {
+        val preset = _uiState.value.selectedPreset
+        if (preset == null) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Please select a preset task first"
+            )
+            return
+        }
+
+        // For preset tasks, always use Agent Run tool
+        _uiState.value = _uiState.value.copy(
+            selectedTool = AgentTool.AGENT_RUN,
+            taskInput = preset.templatePrompt
+        )
+        runTask()
+    }
+
+    fun getPresetsForCategory(category: PresetCategory): List<PresetTask> {
+        return PresetTasks.getByCategory(category)
+    }
+
+    fun getAllPresets(): List<PresetTask> = PresetTasks.tasks
 }

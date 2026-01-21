@@ -32,6 +32,9 @@ class UbuntuSessionManagerImpl @Inject constructor(
     private val proxyManager: ProxyManager
 ) : UbuntuSessionManager {
 
+    // Cache for running session instances to preserve state like rootfsPath
+    private val runningSessionsCache = mutableMapOf<String, UbuntuSessionImpl>()
+
     override suspend fun createSession(config: SessionConfig): Result<UbuntuSession> {
         return try {
             val sessionId = UUID.randomUUID().toString()
@@ -78,8 +81,15 @@ class UbuntuSessionManagerImpl @Inject constructor(
     }
 
     override suspend fun getSession(sessionId: String): UbuntuSession? {
+        // Return cached instance if available (preserves rootfsPath and other runtime state)
+        runningSessionsCache[sessionId]?.let { 
+            Timber.d("getSession($sessionId): returning cached instance with rootfsPath=${it.rootfsPath}")
+            return it 
+        }
+
+        // Load from repository if not in cache
         val sessionInfo = sessionRepository.loadSession(sessionId) ?: return null
-        return UbuntuSessionImpl(
+        val session = UbuntuSessionImpl(
             id = sessionInfo.id,
             config = sessionInfo.toConfig(),
             sessionRepository = sessionRepository,
@@ -88,6 +98,14 @@ class UbuntuSessionManagerImpl @Inject constructor(
             proxyManager = proxyManager,
             initialState = sessionInfo.state.toDomain()
         )
+        
+        // Cache the session if it's running
+        if (session.state is SessionState.Running) {
+            runningSessionsCache[sessionId] = session
+            Timber.d("getSession($sessionId): created and cached new instance for running session")
+        }
+        
+        return session
     }
 
     override suspend fun deleteSession(sessionId: String): Result<Unit> {
@@ -98,6 +116,8 @@ class UbuntuSessionManagerImpl @Inject constructor(
                     it.stop()
                 }
             }
+            // Remove from cache when deleted
+            runningSessionsCache.remove(sessionId)
             sessionRepository.deleteSession(sessionId)
             Timber.d("Deleted session: $sessionId")
             Result.success(Unit)
@@ -113,7 +133,14 @@ class UbuntuSessionManagerImpl @Inject constructor(
             if (session == null) {
                 Result.failure(NoSuchElementException("Session not found: $sessionId"))
             } else {
-                session.start()
+                // Start the session
+                val result = session.start()
+                // Cache the session after successful start to preserve rootfsPath
+                if (result.isSuccess && session is UbuntuSessionImpl) {
+                    runningSessionsCache[sessionId] = session
+                    Timber.d("startSession($sessionId): cached session after start")
+                }
+                result
             }
         } catch (e: Exception) {
             Timber.e(e, "Failed to start session: $sessionId")
@@ -124,11 +151,15 @@ class UbuntuSessionManagerImpl @Inject constructor(
     override suspend fun stopSession(sessionId: String): Result<Unit> {
         return try {
             val session = getSession(sessionId)
-            if (session == null) {
-                Result.failure(NoSuchElementException("Session not found: $sessionId"))
-            } else {
-                session.stop()
+            session?.let {
+                if (it.state is SessionState.Running) {
+                    it.stop()
+                }
             }
+            // Remove from cache when stopped
+            runningSessionsCache.remove(sessionId)
+            Timber.d("stopSession($sessionId): removed from cache")
+            Result.success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "Failed to stop session: $sessionId")
             Result.failure(e)
@@ -149,7 +180,7 @@ class UbuntuSessionImpl(
     // Use MutableStateFlow for immediate state updates to UI
     private val _stateFlow = MutableStateFlow(initialState)
     private var vncPort: Int = 5901
-    private var rootfsPath: java.io.File? = null
+    internal var rootfsPath: java.io.File? = null
     private var proxyUrl: String? = null
 
     override val state: SessionState get() = _stateFlow.value
@@ -189,6 +220,11 @@ class UbuntuSessionImpl(
             Log.d(TAG, "Starting session: $id with distro ${config.distro.id}")
             Timber.d("Starting session: $id with distro ${config.distro.id}")
 
+            // Set rootfs path early so it's available even if installation fails later
+            rootfsPath = rootfsManager.getRootfsPath(config.distro)
+            Log.d(TAG, "Rootfs path set to: ${rootfsPath!!.absolutePath}")
+            Timber.d("Rootfs path set to: ${rootfsPath!!.absolutePath}")
+
             // Check if rootfs is installed
             Log.d(TAG, "Checking if rootfs is installed...")
             if (!rootfsManager.isRootfsInstalled(config.distro)) {
@@ -208,13 +244,18 @@ class UbuntuSessionImpl(
                     }
                     Log.d(TAG, "Bundled rootfs installed successfully")
                 } else {
-                    throw Exception("Rootfs not installed and distro is not bundled. Please download first.")
+                    val distroName = config.distro.displayName
+                    val errorMessage = "Rootfs for $distroName is not installed. This distro requires download. " +
+                                    "Please use Alpine Linux (Minimal, Bundled) for quick testing, or " +
+                                    "implement rootfs download for $distroName."
+                    Log.e(TAG, errorMessage)
+                    Timber.e(errorMessage)
+                    throw Exception(errorMessage)
                 }
             } else {
                 Log.d(TAG, "Rootfs already installed")
             }
 
-            rootfsPath = rootfsManager.getRootfsPath(config.distro)
             Log.d(TAG, "Using rootfs at: ${rootfsPath!!.absolutePath}")
             Timber.d("Using rootfs at: ${rootfsPath!!.absolutePath}")
 
@@ -354,11 +395,18 @@ class UbuntuSessionImpl(
 
     override suspend fun exec(command: String, timeoutSeconds: Long): Result<ProcessResult> {
         return try {
-            if (_stateFlow.value !is SessionState.Running) {
-                return Result.failure(IllegalStateException("Session not running"))
+            val currentState = _stateFlow.value
+            Timber.d("exec() called: sessionId=$id, state=$currentState, rootfsPath=$rootfsPath, command=$command")
+            
+            if (currentState !is SessionState.Running) {
+                Timber.e("exec() failed: session not running, state=$currentState")
+                return Result.failure(IllegalStateException("Session not running (state: $currentState)"))
             }
 
-            val path = rootfsPath ?: return Result.failure(IllegalStateException("Rootfs path not set"))
+            val path = rootfsPath ?: run {
+                Timber.e("exec() failed: rootfsPath is null for session $id")
+                return Result.failure(IllegalStateException("Rootfs path not set for session $id"))
+            }
 
             Timber.d("Executing command in session $id: $command")
 
