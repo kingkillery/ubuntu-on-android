@@ -1,5 +1,6 @@
 package com.udroid.app.ui.agent
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -15,9 +16,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.rememberAsyncImagePainter
 import kotlinx.coroutines.delay
 
 @Composable
@@ -25,6 +28,15 @@ fun AgentBrowserView(
     serverUrl: String,
     onControlAction: (String, String) -> Unit
 ) {
+    var tick by remember { mutableIntStateOf(0) }
+    var key by remember { mutableIntStateOf(0) }
+    
+    // Poll for screenshot
+    LaunchedEffect(key) {
+        delay(500) // 2 FPS
+        tick++
+    }
+
     // Image URL with timestamp to bust cache
     val imageUrl = "$serverUrl/screenshot?t=${System.currentTimeMillis()}"
 
@@ -33,13 +45,21 @@ fun AgentBrowserView(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // Browser Viewport Placeholder (No Coil)
-        Box(
+        // Browser Viewport
+        Image(
+            painter = rememberAsyncImagePainter(
+                model = imageUrl,
+                onSuccess = { key++ }, // Trigger next poll
+                onError = { 
+                    // Retry on error
+                    key++ 
+                }
+            ),
+            contentDescription = "Browser View",
             modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("Browser Stream: $imageUrl", color = Color.White)
-        }
+            contentScale = ContentScale.Fit,
+            alignment = Alignment.TopStart
+        )
 
         // Overlay Controls (Comet Style)
         Box(
@@ -74,5 +94,18 @@ fun AgentBrowserView(
                 }
             }
         }
+        
+        // Debug URL
+        Text(
+            text = "Connected to: $serverUrl",
+            color = Color.Green,
+            fontSize = 10.sp,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(8.dp)
+                .background(Color.Black.copy(alpha = 0.5f))
+                .padding(4.dp)
+        )
     }
 }
