@@ -25,6 +25,7 @@ import com.udroid.app.ui.services.ServicesScreen
 import com.udroid.app.ui.setup.SetupWizardScreen
 import com.udroid.app.ui.terminal.TerminalScreen
 import com.udroid.app.ui.agent.AgentTaskScreen
+import com.udroid.app.ui.puzldai.PkPuzldaiScreen
 import com.udroid.app.ui.theme.UdroidTheme
 import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
@@ -143,6 +144,9 @@ fun AppNavigation(
                 },
                 onAgentTaskClick = { sessionId ->
                     navController.navigate("agent_task/$sessionId")
+                },
+                onPuzldaiClick = { sessionId ->
+                    navController.navigate("puzldai/$sessionId")
                 }
             )
         }
@@ -202,6 +206,19 @@ fun AppNavigation(
         ) { backStackEntry ->
             val sessionId = backStackEntry.arguments?.getString("sessionId") ?: return@composable
             AgentTaskScreen(
+                sessionId = sessionId,
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(
+            route = "puzldai/{sessionId}",
+            arguments = listOf(navArgument("sessionId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val sessionId = backStackEntry.arguments?.getString("sessionId") ?: return@composable
+            PkPuzldaiScreen(
                 sessionId = sessionId,
                 onBack = {
                     navController.popBackStack()

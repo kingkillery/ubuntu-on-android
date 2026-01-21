@@ -31,6 +31,7 @@ fun SessionListScreen(
     onServicesClick: (sessionId: String) -> Unit,
     onTerminalClick: (sessionId: String) -> Unit = {},
     onAgentTaskClick: (sessionId: String) -> Unit = {},
+    onPuzldaiClick: (sessionId: String) -> Unit = {},
     viewModel: SessionListViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -92,6 +93,7 @@ fun SessionListScreen(
                             onServices = { onServicesClick(session.id) },
                             onTerminal = { onTerminalClick(session.id) },
                             onAgentTask = { onAgentTaskClick(session.id) },
+                            onPuzldai = { onPuzldaiClick(session.id) },
                             onToggle = {
                                 when (sessionState) {
                                     is com.udroid.app.model.SessionState.Running -> {
@@ -129,6 +131,7 @@ fun SessionItem(
     onServices: () -> Unit,
     onTerminal: () -> Unit,
     onAgentTask: () -> Unit,
+    onPuzldai: () -> Unit,
     onToggle: () -> Unit
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -186,6 +189,22 @@ fun SessionItem(
                         contentDescription = "Agent Tasks",
                         tint = if (sessionState is com.udroid.app.model.SessionState.Running)
                             MaterialTheme.colorScheme.secondary
+                        else
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    )
+                }
+                // PK-Puzldai TUI button - primary action when running
+                IconButton(
+                    onClick = onPuzldai,
+                    enabled = sessionState is com.udroid.app.model.SessionState.Running
+                ) {
+                    // Using red color for PK-Puzld brand
+                    androidx.compose.material3.Text(
+                        text = "PK",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (sessionState is com.udroid.app.model.SessionState.Running)
+                            androidx.compose.ui.graphics.Color(0xFFFC3855) // PK-Puzld red
                         else
                             MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                     )
