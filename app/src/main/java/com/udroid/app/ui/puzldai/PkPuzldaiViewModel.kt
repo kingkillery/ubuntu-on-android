@@ -63,7 +63,8 @@ data class PkPuzldaiUiState(
 class PkPuzldaiViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val sessionManager: UbuntuSessionManager,
-    private val agentManager: AgentManager
+    private val agentManager: AgentManager,
+    private val chatRepository: PuzldaiChatRepository
 ) : ViewModel() {
 
     private val sessionId: String = savedStateHandle.get<String>("sessionId") ?: ""
@@ -73,6 +74,26 @@ class PkPuzldaiViewModel @Inject constructor(
 
     init {
         loadSessionAndObserveState()
+        loadChatHistory()
+    }
+
+    private fun loadChatHistory() {
+        viewModelScope.launch {
+            val messages = chatRepository.loadChatHistory(sessionId)
+            if (messages.isNotEmpty()) {
+                _uiState.value = _uiState.value.copy(
+                    messages = messages,
+                    showBanner = false // Hide banner if we have history
+                )
+                Timber.d("Loaded ${messages.size} messages from chat history")
+            }
+        }
+    }
+
+    private fun saveChatHistory() {
+        viewModelScope.launch {
+            chatRepository.saveChatHistory(sessionId, _uiState.value.messages)
+        }
     }
 
     private fun loadSessionAndObserveState() {
@@ -292,6 +313,7 @@ class PkPuzldaiViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             messages = _uiState.value.messages + message
         )
+        saveChatHistory()
     }
 
     private fun addAssistantMessage(content: String, agent: String? = null) {
@@ -304,6 +326,7 @@ class PkPuzldaiViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             messages = _uiState.value.messages + message
         )
+        saveChatHistory()
     }
 
     private fun addSystemMessage(content: String) {
@@ -315,6 +338,7 @@ class PkPuzldaiViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             messages = _uiState.value.messages + message
         )
+        saveChatHistory()
     }
 
     private fun addErrorMessage(content: String) {
@@ -326,6 +350,7 @@ class PkPuzldaiViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             messages = _uiState.value.messages + message
         )
+        saveChatHistory()
     }
 
     private fun showHelp() {
@@ -354,6 +379,9 @@ class PkPuzldaiViewModel @Inject constructor(
             messages = emptyList(),
             showBanner = true
         )
+        viewModelScope.launch {
+            chatRepository.deleteChatHistory(sessionId)
+        }
     }
 
     private fun switchAgent(agentName: String) {
