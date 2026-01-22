@@ -40,6 +40,9 @@ device_screen.png
 # Logcat output
 logcat*.txt
 
+# Build/install logs
+build_install*.log
+
 # Android Generic
 captures/
 .externalNativeBuild/
