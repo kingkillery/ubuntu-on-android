@@ -58,3 +58,6 @@ captures/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+.gemini/
+gha-creds-*.json

@@ -60,6 +60,14 @@ echo "[devbox] Setting up home directory..."
 mkdir -p /home/udroid/workspace
 chown -R udroid:udroid /home/udroid
 
+# Install Tailscale utility
+SCRIPT_DIR=$(dirname "$0")
+if [ -f "$SCRIPT_DIR/setup-tailscale.sh" ]; then
+    echo "[devbox] Installing Tailscale setup utility..."
+    cp "$SCRIPT_DIR/setup-tailscale.sh" /usr/local/bin/setup-tailscale
+    chmod +x /usr/local/bin/setup-tailscale
+fi
+
 # Create marker file
 echo "[devbox] Setup complete!"
 touch /home/udroid/.devbox-setup-complete
@@ -69,4 +77,5 @@ echo "[devbox] Devbox setup complete!"
 echo "[devbox] User: udroid"
 echo "[devbox] Password: udroid"
 echo "[devbox] Workspace: /home/udroid/workspace"
+echo "[devbox] Remote Access: run 'sudo setup-tailscale' to configure"
 echo "[devbox] ============================================"
