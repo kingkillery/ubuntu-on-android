@@ -1,5 +1,4 @@
 package com.udroid.app.ui.tui
-import androidx.compose.material3.MaterialTheme
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*

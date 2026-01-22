@@ -1,14 +1,20 @@
 package com.udroid.app.ui.tui
 
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
-
 import androidx.compose.ui.graphics.Color
 
 /**
- * TUI Color scheme matching PK-Puzld.ai terminal aesthetic.
- * Derived from Puzld.ai Banner.tsx colors.
+ * TUI Color scheme extensions matching PK-Puzld.ai terminal aesthetic.
  */
-// TuiColors object removed - Use MaterialTheme.colorScheme instead
+val ColorScheme.onBackgroundMuted: Color
+    get() = this.onBackground.copy(alpha = 0.6f)
+
+val ColorScheme.onBackgroundDim: Color
+    get() = this.onBackground.copy(alpha = 0.38f)
+
+val ColorScheme.errorMessage: Color
+    get() = this.error
 
 /**
  * Box drawing characters for TUI borders (Unicode rounded corners).
@@ -16,27 +22,27 @@ import androidx.compose.ui.graphics.Color
  */
 object TuiBoxChars {
     // Rounded corners
-    const val TOP_LEFT = "╭"
-    const val TOP_RIGHT = "╮"
-    const val BOTTOM_LEFT = "╰"
-    const val BOTTOM_RIGHT = "╯"
+    const val TOP_LEFT = "â•­"
+    const val TOP_RIGHT = "â•®"
+    const val BOTTOM_LEFT = "â•°"
+    const val BOTTOM_RIGHT = "â•¯"
 
     // Straight lines
-    const val HORIZONTAL = "─"
-    const val VERTICAL = "│"
+    const val HORIZONTAL = "â”€"
+    const val VERTICAL = "â”‚"
 
     // T-junctions
-    const val LEFT_T = "├"
-    const val RIGHT_T = "┤"
-    const val TOP_T = "┬"
-    const val BOTTOM_T = "┴"
+    const val LEFT_T = "â”œ"
+    const val RIGHT_T = "â”¤"
+    const val TOP_T = "â”¬"
+    const val BOTTOM_T = "â”´"
 
     // Cross
-    const val CROSS = "┼"
+    const val CROSS = "â”¼"
 
     // Status bullets
-    const val BULLET_FILLED = "●"
-    const val BULLET_EMPTY = "○"
+    const val BULLET_FILLED = "â—"
+    const val BULLET_EMPTY = "â—‹"
 
     /**
      * Create a horizontal line of specified width.

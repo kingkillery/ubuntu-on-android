@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -39,14 +40,14 @@ fun PkPuzldaiScreen(
                         Text(
                             text = "PK-Puzld",
                             fontFamily = FontFamily.Monospace,
-                            color = TuiColors.Red
+                            color = MaterialTheme.colorScheme.primary
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "● ${uiState.currentAgent}",
+                            text = "â— ${uiState.currentAgent}",
                             fontFamily = FontFamily.Monospace,
                             fontSize = 12.sp,
-                            color = TuiColors.AgentReady
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 },
@@ -59,13 +60,13 @@ fun PkPuzldaiScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = TuiColors.Background,
-                    titleContentColor = TuiColors.Foreground,
-                    navigationIconContentColor = TuiColors.Foreground
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground
                 )
             )
         },
-        containerColor = TuiColors.Background
+        containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         Box(
             modifier = Modifier
@@ -123,14 +124,14 @@ fun PkPuzldaiScreen(
                         .padding(16.dp),
                     action = {
                         TextButton(onClick = { viewModel.clearError() }) {
-                            Text("Dismiss", color = TuiColors.Foreground)
+                            Text("Dismiss", color = MaterialTheme.colorScheme.onBackground)
                         }
                     },
-                    containerColor = TuiColors.Error.copy(alpha = 0.9f)
+                    containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.9f)
                 ) {
                     Text(
                         text = uiState.errorMessage ?: "",
-                        color = TuiColors.White,
+                        color = Color.White,
                         fontFamily = FontFamily.Monospace
                     )
                 }
@@ -152,13 +153,13 @@ private fun LoadingState(
         verticalArrangement = Arrangement.Center
     ) {
         CircularProgressIndicator(
-            color = TuiColors.Info,
+            color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(48.dp)
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = message,
-            color = TuiColors.ForegroundDim,
+            color = MaterialTheme.colorScheme.onBackgroundDim,
             fontFamily = FontFamily.Monospace,
             fontSize = 14.sp
         )
@@ -185,7 +186,7 @@ private fun InstallPromptState(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(TuiColors.Background)
+            .background(MaterialTheme.colorScheme.background)
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -201,13 +202,13 @@ private fun InstallPromptState(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(TuiColors.Surface)
+                .background(MaterialTheme.colorScheme.surface)
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = "pk-puzldai not installed",
-                color = TuiColors.Warning,
+                color = MaterialTheme.colorScheme.error,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 16.sp
             )
@@ -215,8 +216,7 @@ private fun InstallPromptState(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = """
-                    pk-puzldai is a multi-LLM orchestrator that provides:
+                text = """                    pk-puzldai is a multi-LLM orchestrator that provides:
 
                     • Multi-agent chat (Claude, Gemini, Ollama)
                     • Agentic task execution
@@ -225,7 +225,7 @@ private fun InstallPromptState(
 
                     Install now to get started.
                 """.trimIndent(),
-                color = TuiColors.ForegroundDim,
+                color = MaterialTheme.colorScheme.onBackgroundDim,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp
             )
@@ -237,14 +237,14 @@ private fun InstallPromptState(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     CircularProgressIndicator(
-                        color = TuiColors.Info,
+                        color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp),
                         strokeWidth = 2.dp
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = "Installing...",
-                        color = TuiColors.Info,
+                        color = MaterialTheme.colorScheme.primary,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 14.sp
                     )
@@ -253,8 +253,8 @@ private fun InstallPromptState(
                 Button(
                     onClick = onInstall,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = TuiColors.Red,
-                        contentColor = TuiColors.White
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = Color.White
                     )
                 ) {
                     Text(
@@ -269,7 +269,7 @@ private fun InstallPromptState(
 
         Text(
             text = "This will install Node.js and the pk-puzldai CLI",
-            color = TuiColors.ForegroundMuted,
+            color = MaterialTheme.colorScheme.onBackgroundMuted,
             fontFamily = FontFamily.Monospace,
             fontSize = 10.sp
         )
